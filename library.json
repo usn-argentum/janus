@@ -1,0 +1,24 @@
+{
+  "name": "Janus",
+  "version": "0.0.0",
+  "description": "HAL for controlling actuators",
+  "keywords": "",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/usn-argentum/janus.git"
+  },
+  "authors":
+  [
+    {
+      "name": "USN Argentum",
+      "email": "contact@usnargentum.no",
+      "url": "https://usnargentum.no/"
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://usnargentum.no/",
+  "dependencies": {},
+  "frameworks": "*",
+  "platforms": "*"
+}
