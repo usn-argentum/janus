@@ -9,8 +9,22 @@ enum class ReturnCode
   HardwareError
 };
 
+template <typename T>
+struct JanusReturn
+{
+  T value;
+  ReturnCode code;
+};
+
 namespace Hardware 
 {
+  class Component
+  {
+    private:
+
+    public:
+
+  };
 
   class Motor
   {

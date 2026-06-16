@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include "Controllers.h"
+#include "Janus.h"
 
 // https://forum.arduino.cc/t/sgn-sign-signum-function-suggestions/602445/2
 template <typename T> int sign(T val) {
@@ -106,3 +106,10 @@ void SteeringDriver::set_angle(double a)
 }
 
 } // namespace Driver
+
+// hack to make 'pio run' compile the library for testing
+#ifdef DEBUG_BUILD
+void setup() {}
+void loop() {}
+#endif
+
