@@ -54,33 +54,41 @@ namespace Hardware
     public:
       PWMMotor(size_t pwm_pin, size_t dir_pin, size_t en_pin) : Component(), pin_pwm{ pwm_pin }, pin_direction{ dir_pin }, pin_enable { en_pin } {};
       void init() override;
+      void update() override;
       unsigned int get_period();
       void set_period(unsigned int p);
       void set_invert(bool inv);
       bool get_direction();
       void set_direction(bool dir);
-      void update() override;
   };
 
-  class Steering : public Component
+  class Servo : public Component
   {
     private:
       size_t pin_pwm;
       unsigned int period = 0;
 
     public:
-      void init();
-      void set_period(unsigned int a);
+      Servo(size_t pwm_pin) : Component(), pin_pwm{ pwm_pin } {};
+      void init() override;
+      void update() override;
+      void set_period(unsigned int p);
       unsigned int get_period();
   };
 
+  class Stepper : public Component
+  {
+    private:
+      size_t pin_a;
+      size_t pin_b;
+  };
 }
 
 namespace Driver
 {
   class Driver
   {
-    private:
+    protected:
       StatusCode last_status;
       bool enable;
       virtual void set_status(StatusCode s);
@@ -91,39 +99,37 @@ namespace Driver
       virtual void init();
       bool was_error();
       bool is_ok();
+      void set_enable(bool en);
       StatusCode get_status();
   };
 
   class ESCON50Driver: public Driver
   {
     private:
-      Hardware::PWMMotor* motor;
-      double speed;
+        double speed = 0.00;
 
     public:
       ESCON50Driver(Hardware::PWMMotor* m) : 
         Driver( m ) {};
       void init() override;
+      void set_speed(double s);
+      void update();
   };
 
-  class SteeringDriver
+  class ServoDriver : public Driver
   {
     private:
       double angle = 0.00;
       double trim_angle = 0.00;
-      double turning_speed = 0.00;
-      Hardware::Steering* steering;
 
       double angle_to_steering_value(double a);
       double steering_value_to_angle(double s);
       
     public:
-      SteeringDriver() {};
-      SteeringDriver(Hardware::Steering* s) : steering{ s } {};
+      ServoDriver(Hardware::Servo* s) : Driver( s ) {};
       void init();
       double get_angle();
       void set_angle(double a);
-      double set_turning_speed(double s);
   };
 
 }

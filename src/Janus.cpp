@@ -53,11 +53,13 @@ inline void Component::clear_status()
 void Component::arm()
 {
   armed = true;
+  update();
 }
 
 void Component::disarm()
 {
   armed = false;
+  update();
 }
 
 void PWMMotor::init()
@@ -119,6 +121,46 @@ void PWMMotor::update()
   {
     digitalWrite(pin_enable, LOW);
   }
+}
+
+void Servo::init()
+{
+  pinMode(pin_pwm, OUTPUT);
+
+  disarm();
+}
+
+void Servo::update()
+{
+  clear_status();
+
+  if(armed)
+  {
+    analogWrite(pin_pwm, period);
+  }
+  else
+  {
+    //TODO implement
+  }
+}
+
+void Servo::set_period(unsigned int p)
+{
+  clear_status();
+
+  if (p < 0 || p >= (1 << pwm_depth))
+  {
+    set_status(StatusCode::HardwareInvalidValue);
+    return;
+  }
+
+  period = p;
+  update();
+}
+
+unsigned int Servo::get_period()
+{
+  return period;
 }
 
 /*
