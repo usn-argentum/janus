@@ -1,52 +1,68 @@
-enum class ReturnCode 
+// Janus HAL library
+// USN Argentum
+//
+// This library provides a HAL for controlling different types of actuators. It
+// aims to make hardware components easily changeable and tuneable
+
+enum class StatusCode 
 {
   OK = 1,
+  DriverInvalidValue,
   DriverWarning,
   DriverError,
-  DriverInvalidValue,
 
+  HardwareInvalidValue,
   HardwareWarning,
   HardwareError
 };
 
-template <typename T>
-struct JanusReturn
-{
-  T value;
-  ReturnCode code;
-};
-
 namespace Hardware 
 {
+  unsigned int pwm_depth;
+  void set_pwm_depth(unsigned int d);
+  void init();
+
   class Component
   {
-    private:
+    protected: // not proud of this but bleh
+      StatusCode last_status;
+      bool armed;
+      inline void set_status(StatusCode s);
+      inline void clear_status();
 
     public:
-
+      virtual void init();
+      inline bool was_error();
+      inline bool is_ok();
+      inline StatusCode get_status();
+      inline bool is_armed();
+      void arm();
+      void disarm();
+      virtual void update();
   };
 
-  class Motor
+  class PWMMotor : public Component
   {
     private:
       size_t pin_pwm;
       size_t pin_direction;
       size_t pin_enable;
       unsigned int period;
-      char direction;
-
+      bool direction;
+      bool inverted;
+ 
     public:
-      Motor(size_t pwm_pin, size_t dir_pin, size_t en_pin) : pin_pwm{ pwm_pin }, pin_direction{ dir_pin }, pin_enable { en_pin } {};
-      void init();
-      void set_period(unsigned int s);
+      PWMMotor(size_t pwm_pin, size_t dir_pin, size_t en_pin) : Component(), pin_pwm{ pwm_pin }, pin_direction{ dir_pin }, pin_enable { en_pin } {};
+      void init() override;
       unsigned int get_period();
-      void set_direction(char dir);
-      char get_direction();
-      void disable();
-      void commit();
+      void set_period(unsigned int p);
+      void set_invert(bool inv);
+      bool get_direction();
+      void set_direction(bool dir);
+      void update() override;
   };
 
-  class Steering
+  class Steering : public Component
   {
     private:
       size_t pin_pwm;
@@ -62,20 +78,32 @@ namespace Hardware
 
 namespace Driver
 {
-
-  class MotorDriver
+  class Driver
   {
     private:
-      double speed = 0;
-      Hardware::Motor* motor;
+      StatusCode last_status;
+      bool enable;
+      virtual void set_status(StatusCode s);
+      Hardware::Component* child;
 
     public:
-      MotorDriver() {};
-      MotorDriver(Hardware::Motor* m) : motor{ m } {};
-      void init();
-      double get_speed();
-      void set_speed(double s);
-      double get_position();
+      Driver(Hardware::Component* c) : child { c } {};
+      virtual void init();
+      bool was_error();
+      bool is_ok();
+      StatusCode get_status();
+  };
+
+  class ESCON50Driver: public Driver
+  {
+    private:
+      Hardware::PWMMotor* motor;
+      double speed;
+
+    public:
+      ESCON50Driver(Hardware::PWMMotor* m) : 
+        Driver( m ) {};
+      void init() override;
   };
 
   class SteeringDriver

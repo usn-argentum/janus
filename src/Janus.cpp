@@ -9,6 +9,119 @@ template <typename T> int sign(T val) {
 namespace Hardware
 {
 
+void set_pwm_depth(unsigned int d)
+{
+  pwm_depth = d;
+  analogWriteResolution(d);
+}
+
+void init()
+{
+  set_pwm_depth(8);
+}
+
+inline bool Component::is_armed()
+{
+  return armed;
+}
+
+bool Component::was_error()
+{
+  return last_status != StatusCode::OK;
+}
+
+bool Component::is_ok()
+{
+  return !was_error();
+}
+
+void Component::set_status(StatusCode s)
+{
+  last_status = s;
+}
+
+StatusCode Component::get_status()
+{
+  return last_status;
+}
+
+inline void Component::clear_status()
+{
+  set_status(StatusCode::OK);
+}
+
+void Component::arm()
+{
+  armed = true;
+}
+
+void Component::disarm()
+{
+  armed = false;
+}
+
+void PWMMotor::init()
+{
+  pinMode(pin_pwm, OUTPUT);
+  pinMode(pin_direction, OUTPUT);
+  pinMode(pin_enable, OUTPUT);
+
+  disarm();
+}
+
+unsigned int PWMMotor::get_period()
+{
+  return period;
+}
+
+void PWMMotor::set_period(unsigned int p)
+{
+  clear_status();
+
+  if (p < 0 || p >= (1 << Hardware::pwm_depth)) { 
+    set_status(StatusCode::HardwareInvalidValue);
+    return;
+  }
+
+  period = p;
+  update();
+}
+
+void PWMMotor::set_invert(bool inv)
+{
+  inverted = inv;
+}
+
+bool PWMMotor::get_direction()
+{
+  return direction ^ inverted;
+}
+
+void PWMMotor::set_direction(bool dir)
+{
+  clear_status();
+
+  direction = dir ^ inverted;
+  update();
+}
+
+void PWMMotor::update()
+{
+  clear_status();
+
+  if (armed)
+  {
+    analogWrite(pin_pwm, period);
+    digitalWrite(pin_direction, direction);
+    digitalWrite(pin_enable, HIGH);
+  }
+  else
+  {
+    digitalWrite(pin_enable, LOW);
+  }
+}
+
+/*
 void Motor::init()
 {
   pinMode(pin_direction, OUTPUT);
@@ -64,11 +177,13 @@ unsigned int Steering::get_period()
   return period;
 }
 
+*/
 } // namespace Hardware
 
 namespace Driver
 {
 
+/*
 void MotorDriver::init()
 {
   motor->init();
@@ -104,6 +219,7 @@ void SteeringDriver::set_angle(double a)
 {
 
 }
+*/
 
 } // namespace Driver
 
