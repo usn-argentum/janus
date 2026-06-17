@@ -113,7 +113,7 @@ void PWMMotor::update()
 
   if (armed)
   {
-    analogWrite(pin_pwm, period);
+    analogWrite(pin_pwm, constrain(period, 25, 230));
     digitalWrite(pin_direction, direction);
     digitalWrite(pin_enable, HIGH);
   }
