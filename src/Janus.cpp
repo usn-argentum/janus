@@ -306,7 +306,9 @@ void ESCON50Driver::set_speed(double s)
   speed = s;
 
   child->set_period(abs(speed) * 255);
-  child->set_direction(sign(speed));
+  child->set_direction((speed >= 0));
+  Serial.print("Motor direction: ");
+  Serial.println(child->get_direction());
   child->update();
 }
 
