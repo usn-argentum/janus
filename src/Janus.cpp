@@ -269,6 +269,7 @@ StatusCode Driver<T>::get_status()
 void ESCON50Driver::init()
 {
   child->init();
+  child->arm();
 }
 
 void ESCON50Driver::set_speed(double s)
