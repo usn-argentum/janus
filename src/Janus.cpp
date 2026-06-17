@@ -38,7 +38,7 @@ bool Component::is_ok()
 void Component::set_status(StatusCode s)
 {
   Serial.print("Component set status: ");
-  Serial.println(s);
+  Serial.println(static_cast<int>(s));
   last_status = s;
 }
 
@@ -86,7 +86,7 @@ void PWMMotor::set_period(unsigned int p)
   clear_status();
 
   if (p < 0 || p >= (1 << 8)) { 
-    Serial.println("Invalid motor pwm period")
+    Serial.println("Invalid motor pwm period");
     set_status(StatusCode::HardwareInvalidValue);
     return;
   }
@@ -240,7 +240,7 @@ template <typename T>
 void Driver<T>::set_status(StatusCode s)
 {
   Serial.print("Driver set status: ");
-  Serial.println(s);
+  Serial.println(static_cast<int>(s));
   last_status = s;
 }
 
