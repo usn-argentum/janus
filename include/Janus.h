@@ -152,14 +152,14 @@ namespace Driver
       double angle = 0.00;
       double trim_angle = 0.00;
 
-      double angle_to_steering_value(double a);
-      double steering_value_to_angle(double s);
+      double angle_to_steering_value(double deg);
+      double steering_value_to_angle(double steer);
       
     public:
       ServoDriver(Hardware::Servo* s) : Driver<Hardware::Servo>( s ) {};
       void init();
       double get_angle();
-      void set_angle(double a);
+      void set_angle(double deg);
   };
 
 }
