@@ -73,7 +73,8 @@ void PWMMotor::init()
   pinMode(pin_direction, OUTPUT);
   pinMode(pin_enable, OUTPUT);
 
-  disarm();
+  //disarm();
+  arm();
 }
 
 unsigned int PWMMotor::get_period()
