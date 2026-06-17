@@ -20,8 +20,8 @@ enum class StatusCode
 
 namespace Hardware 
 {
-  unsigned int pwm_depth;
-  void set_pwm_depth(unsigned int d);
+  //unsigned int pwm_depth;
+  //void set_pwm_depth(unsigned int d);
   void init();
 
   class Component
