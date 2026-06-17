@@ -37,6 +37,8 @@ bool Component::is_ok()
 
 void Component::set_status(StatusCode s)
 {
+  Serial.print("Component set status: ");
+  Serial.println(s);
   last_status = s;
 }
 
@@ -52,18 +54,21 @@ inline void Component::clear_status()
 
 void Component::arm()
 {
+  Serial.println("Component armed");
   armed = true;
   update();
 }
 
 void Component::disarm()
 {
+  Serial.println("Component disarmed");
   armed = false;
   update();
 }
 
 void PWMMotor::init()
 {
+  Serial.println("Motor init");
   pinMode(pin_pwm, OUTPUT);
   pinMode(pin_direction, OUTPUT);
   pinMode(pin_enable, OUTPUT);
@@ -81,6 +86,7 @@ void PWMMotor::set_period(unsigned int p)
   clear_status();
 
   if (p < 0 || p >= (1 << 8)) { 
+    Serial.println("Invalid motor pwm period")
     set_status(StatusCode::HardwareInvalidValue);
     return;
   }
@@ -101,6 +107,8 @@ bool PWMMotor::get_direction()
 
 void PWMMotor::set_direction(bool dir)
 {
+  Serial.print("Set motor direction: ");
+  Serial.println(dir);
   clear_status();
 
   direction = dir ^ inverted;
@@ -111,14 +119,17 @@ void PWMMotor::update()
 {
   clear_status();
 
+  Serial.print("Motor update: ");
   if (armed)
   {
+    Serial.println(constrain(period, 25, 230));
     analogWrite(pin_pwm, constrain(period, 25, 230));
     digitalWrite(pin_direction, direction);
     digitalWrite(pin_enable, HIGH);
   }
   else
   {
+    Serial.println("Disarmed");
     digitalWrite(pin_enable, LOW);
   }
 }
@@ -228,6 +239,8 @@ namespace Driver
 template <typename T>
 void Driver<T>::set_status(StatusCode s)
 {
+  Serial.print("Driver set status: ");
+  Serial.println(s);
   last_status = s;
 }
 
@@ -240,12 +253,15 @@ void Driver<T>::clear_status()
 template <typename T>
 void Driver<T>::init()
 {
+  Serial.println("Inited child");
   child->init();
 }
 
 template <typename T>
 void Driver<T>::set_enable(bool en)
 {
+  Serial.print("Driver set enable: ");
+  Serial.println(en);
   clear_status();
 
   enable = en;
@@ -268,16 +284,20 @@ StatusCode Driver<T>::get_status()
 
 void ESCON50Driver::init()
 {
+  Serial.println("ESCON init");
   child->init();
   child->arm();
 }
 
 void ESCON50Driver::set_speed(double s)
 {
+  Serial.print("ESCON set speed: ");
+  Serial.println(s);
   clear_status();
 
   if (s > 1.0f || s < -1.0f)
   {
+    Serial.println("Error");
     set_status(StatusCode::DriverInvalidValue);
     return;
   }
