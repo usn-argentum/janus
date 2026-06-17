@@ -337,7 +337,7 @@ void ESCON50Driver::set_speed(double s)
   child->update();
 }
 
-double angle_to_steering_value(double deg)
+double ServoDriver::angle_to_steering_value(double deg)
 {
   return (deg / 180.00) * 255.00;
 }
