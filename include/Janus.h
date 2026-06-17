@@ -86,16 +86,18 @@ namespace Hardware
 
 namespace Driver
 {
+  template <typename T>
   class Driver
   {
     protected:
       StatusCode last_status;
       bool enable;
       virtual void set_status(StatusCode s);
-      Hardware::Component* child;
+      void clear_status();
+      T* child;
 
     public:
-      Driver(Hardware::Component* c) : child { c } {};
+      Driver(T* c) : child { c } {};
       virtual void init();
       bool was_error();
       bool is_ok();
@@ -103,20 +105,20 @@ namespace Driver
       StatusCode get_status();
   };
 
-  class ESCON50Driver: public Driver
+  class ESCON50Driver: public Driver<Hardware::PWMMotor>
   {
     private:
-        double speed = 0.00;
+      double speed = 0.00;
 
     public:
       ESCON50Driver(Hardware::PWMMotor* m) : 
-        Driver( m ) {};
+        Driver<Hardware::PWMMotor>( m ) {};
       void init() override;
       void set_speed(double s);
       void update();
   };
 
-  class ServoDriver : public Driver
+  class ServoDriver : public Driver<Hardware::Servo>
   {
     private:
       double angle = 0.00;
@@ -126,7 +128,7 @@ namespace Driver
       double steering_value_to_angle(double s);
       
     public:
-      ServoDriver(Hardware::Servo* s) : Driver( s ) {};
+      ServoDriver(Hardware::Servo* s) : Driver<Hardware::Servo>( s ) {};
       void init();
       double get_angle();
       void set_angle(double a);

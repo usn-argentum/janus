@@ -225,6 +225,64 @@ unsigned int Steering::get_period()
 namespace Driver
 {
 
+template <typename T>
+void Driver<T>::set_status(StatusCode s)
+{
+  last_status = s;
+}
+
+template <typename T>
+void Driver<T>::clear_status()
+{
+  set_status(StatusCode::OK);
+}
+
+template <typename T>
+void Driver<T>::init()
+{
+  child->init();
+}
+
+template <typename T>
+void Driver<T>::set_enable(bool en)
+{
+  clear_status();
+
+  enable = en;
+
+  if (enable)
+  {
+    child->arm();
+  }
+  else
+  {
+    child->disarm();
+  }
+}
+
+template <typename T>
+StatusCode Driver<T>::get_status()
+{
+  return last_status;
+}
+
+void ESCON50Driver::set_speed(double s)
+{
+  clear_status();
+
+  if (s > 1.0f || s < -1.0f)
+  {
+    set_status(StatusCode::DriverInvalidValue);
+    return;
+  }
+
+  speed = s;
+
+  child->set_period(abs(speed) * 255);
+  child->set_direction(sign(speed));
+  child->update();
+}
+
 /*
 void MotorDriver::init()
 {
