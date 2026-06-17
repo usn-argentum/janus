@@ -133,14 +133,19 @@ namespace Driver
   {
     private:
       double speed = 0.00;
-      const double lower_pwm_bound = 0.1;
-      const unsigned int lower_period = 255 * lower_pwm_bound;
-      const double upper_pwm_bound = 0.9;
-      const unsigned int upper_period = 255 * upper_period;
+      double lower_pwm_bound = 0.1;
+      unsigned int lower_period = 255 * lower_pwm_bound;
+      double upper_pwm_bound = 0.9;
+      unsigned int upper_period = 255 * upper_period;
 
     public:
       ESCON50Driver(Hardware::PWMMotor* m) : 
-        Driver<Hardware::PWMMotor>( m ) {};
+        Driver<Hardware::PWMMotor>( m ) {
+          lower_pwm_bound = 0.1;
+          lower_period = 255 * lower_pwm_bound;
+          upper_pwm_bound = 0.9;
+          upper_period = 255 * upper_period;
+        };
       void init() override;
       void set_speed(double s);
       void update();

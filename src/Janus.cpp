@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "Janus.h"
 
-#pragma once
+//#pragma once
 //#define DEBUG_PRINTS true
 
 // https://forum.arduino.cc/t/sgn-sign-signum-function-suggestions/602445/2
@@ -350,16 +350,16 @@ void ServoDriver::init()
   child->arm();
 }
 
-double get_angle()
+double ServoDriver::get_angle()
 {
   return angle;
 }
 
-void set_angle(double deg)
+void ServoDriver::set_angle(double deg)
 {
   clear_status();
 
-  if (a < 0 || a > 180)
+  if (deg < 0 || deg > 180)
   {
     set_status(StatusCode::DriverInvalidValue);
     return;
