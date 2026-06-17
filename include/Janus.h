@@ -15,32 +15,37 @@ enum class StatusCode
 
   HardwareInvalidValue,
   HardwareWarning,
-  HardwareError
+  HardwareError,
+
+  CriticalFailure
 };
 
 namespace Hardware 
 {
-  //unsigned int pwm_depth;
-  //void set_pwm_depth(unsigned int d);
+  unsigned int pwm_depth;
+  void set_pwm_depth(unsigned int d);
   void init();
 
   class Component
   {
-    protected: // not proud of this but bleh
+    protected: // not proud of using protected but bleh
       StatusCode last_status;
       bool armed;
+
       inline void set_status(StatusCode s);
       inline void clear_status();
 
     public:
       virtual void init();
+      virtual void update();
+      
+      inline StatusCode get_status();
       inline bool was_error();
       inline bool is_ok();
-      inline StatusCode get_status();
-      inline bool is_armed();
+
       void arm();
       void disarm();
-      virtual void update();
+      inline bool is_armed();
   };
 
   class PWMMotor : public Component
@@ -49,6 +54,7 @@ namespace Hardware
       size_t pin_pwm;
       size_t pin_direction;
       size_t pin_enable;
+
       unsigned int period;
       bool direction;
       bool inverted;
@@ -57,9 +63,12 @@ namespace Hardware
       PWMMotor(size_t pwm_pin, size_t dir_pin, size_t en_pin) : Component(), pin_pwm{ pwm_pin }, pin_direction{ dir_pin }, pin_enable { en_pin } {};
       void init() override;
       void update() override;
+
       unsigned int get_period();
       void set_period(unsigned int p);
+
       void set_invert(bool inv);
+      
       bool get_direction();
       void set_direction(bool dir);
   };
@@ -74,6 +83,7 @@ namespace Hardware
       Servo(size_t pwm_pin) : Component(), pin_pwm{ pwm_pin } {};
       void init() override;
       void update() override;
+
       void set_period(unsigned int p);
       unsigned int get_period();
   };
@@ -83,6 +93,18 @@ namespace Hardware
     private:
       size_t pin_a;
       size_t pin_b;
+      size_t pin_c;
+      size_t pin_d;
+
+      long steps;
+
+    public:
+      Stepper(size_t pa, size_t pb, size_t pc, size_t pd) 
+        : Component(), pin_a{ pa }, pin_b{ pb }, pin_c{ pc }, pin_d{ pd } {};
+      void init() override;
+      void update() override;
+
+      void step(int direction);
   };
 }
 
@@ -111,6 +133,10 @@ namespace Driver
   {
     private:
       double speed = 0.00;
+      const double lower_pwm_bound = 0.1;
+      const unsigned int lower_period = 255 * lower_pwm_bound;
+      const double upper_pwm_bound = 0.9;
+      const unsigned int upper_period = 255 * upper_period;
 
     public:
       ESCON50Driver(Hardware::PWMMotor* m) : 

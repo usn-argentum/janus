@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include "Janus.h"
 
+//#define DEBUG_PRINTS true
+
 // https://forum.arduino.cc/t/sgn-sign-signum-function-suggestions/602445/2
 template <typename T> int sign(T val) {
     return (T(0) < val) - (val < T(0));
@@ -9,15 +11,15 @@ template <typename T> int sign(T val) {
 namespace Hardware
 {
 
-/*void set_pwm_depth(unsigned int d)
+void set_pwm_depth(unsigned int d)
 {
   pwm_depth = d;
   analogWriteResolution(d);
-}*/
+}
 
 void init()
 {
-  //set_pwm_depth(8);
+  set_pwm_depth(8);
 }
 
 inline bool Component::is_armed()
@@ -37,8 +39,11 @@ bool Component::is_ok()
 
 void Component::set_status(StatusCode s)
 {
+#ifdef DEBUG_PRINTS
   Serial.print("Component set status: ");
   Serial.println(static_cast<int>(s));
+#endif
+
   last_status = s;
 }
 
@@ -54,27 +59,33 @@ inline void Component::clear_status()
 
 void Component::arm()
 {
+#ifdef DEBUG_PRINTS
   Serial.println("Component armed");
+#endif
   armed = true;
   update();
 }
 
 void Component::disarm()
 {
+#ifdef DEBUG_PRINTS
   Serial.println("Component disarmed");
+#endif
   armed = false;
   update();
 }
 
 void PWMMotor::init()
 {
+#ifdef DEBUG_PRINTS
   Serial.println("Motor init");
+#endif
   pinMode(pin_pwm, OUTPUT);
   pinMode(pin_direction, OUTPUT);
   pinMode(pin_enable, OUTPUT);
 
   //disarm();
-  arm();
+  arm(); // this is dangerous at best
 }
 
 unsigned int PWMMotor::get_period()
@@ -87,7 +98,9 @@ void PWMMotor::set_period(unsigned int p)
   clear_status();
 
   if (p < 0 || p >= (1 << 8)) { 
+#ifdef DEBUG_PRINTS
     Serial.println("Invalid motor pwm period");
+#endif 
     set_status(StatusCode::HardwareInvalidValue);
     return;
   }
@@ -108,8 +121,10 @@ bool PWMMotor::get_direction()
 
 void PWMMotor::set_direction(bool dir)
 {
+#ifdef DEBUG_PRINTS
   Serial.print("Set motor direction: ");
   Serial.println(dir);
+#endif
   clear_status();
 
   direction = dir ^ inverted;
@@ -120,17 +135,19 @@ void PWMMotor::update()
 {
   clear_status();
 
+#ifdef DEBUG_PRINTS
   Serial.print("Motor update: ");
+#endif
   if (armed)
   {
-    Serial.println(constrain(period, 25, 230));
+    //Serial.println(constrain(period, 25, 230));
     analogWrite(pin_pwm, constrain(period, 25, 230));
     digitalWrite(pin_direction, direction);
     digitalWrite(pin_enable, HIGH);
   }
   else
   {
-    Serial.println("Disarmed");
+    //Serial.println("Disarmed");
     digitalWrite(pin_enable, LOW);
   }
 }
@@ -240,8 +257,8 @@ namespace Driver
 template <typename T>
 void Driver<T>::set_status(StatusCode s)
 {
-  Serial.print("Driver set status: ");
-  Serial.println(static_cast<int>(s));
+  //Serial.print("Driver set status: ");
+  //Serial.println(static_cast<int>(s));
   last_status = s;
 }
 
@@ -254,15 +271,19 @@ void Driver<T>::clear_status()
 template <typename T>
 void Driver<T>::init()
 {
+#ifdef DEBUG_PRINTS
   Serial.println("Inited child");
+#endif
   child->init();
 }
 
 template <typename T>
 void Driver<T>::set_enable(bool en)
 {
+#ifdef DEBUG_PRINTS
   Serial.print("Driver set enable: ");
   Serial.println(en);
+#endif
   clear_status();
 
   enable = en;
@@ -285,30 +306,33 @@ StatusCode Driver<T>::get_status()
 
 void ESCON50Driver::init()
 {
-  Serial.println("ESCON init");
+  //Serial.println("ESCON init");
   child->init();
   child->arm();
 }
 
 void ESCON50Driver::set_speed(double s)
 {
-  Serial.print("ESCON set speed: ");
-  Serial.println(s);
+  //Serial.print("ESCON set speed: ");
+  //Serial.println(s);
   clear_status();
 
   if (s > 1.0f || s < -1.0f)
   {
-    Serial.println("Error");
+    //Serial.println("Error");
     set_status(StatusCode::DriverInvalidValue);
     return;
   }
 
   speed = s;
 
-  child->set_period(abs(speed) * 255);
+  child->set_period(map(abs(speed) * 255, 0, 255, lower_period, upper_period));
   child->set_direction((speed >= 0));
+#ifdef DEBUG_PRINTS
   Serial.print("Motor direction: ");
   Serial.println(child->get_direction());
+  Serial.println((speed >= 0));
+#endif
   child->update();
 }
 
