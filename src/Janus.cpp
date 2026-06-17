@@ -9,15 +9,15 @@ template <typename T> int sign(T val) {
 namespace Hardware
 {
 
-void set_pwm_depth(unsigned int d)
+/*void set_pwm_depth(unsigned int d)
 {
   pwm_depth = d;
   analogWriteResolution(d);
-}
+}*/
 
 void init()
 {
-  set_pwm_depth(8);
+  //set_pwm_depth(8);
 }
 
 inline bool Component::is_armed()
@@ -80,7 +80,7 @@ void PWMMotor::set_period(unsigned int p)
 {
   clear_status();
 
-  if (p < 0 || p >= (1 << Hardware::pwm_depth)) { 
+  if (p < 0 || p >= (1 << 8)) { 
     set_status(StatusCode::HardwareInvalidValue);
     return;
   }
@@ -148,7 +148,7 @@ void Servo::set_period(unsigned int p)
 {
   clear_status();
 
-  if (p < 0 || p >= (1 << pwm_depth))
+  if (p < 0 || p >= (1 << 8))
   {
     set_status(StatusCode::HardwareInvalidValue);
     return;
