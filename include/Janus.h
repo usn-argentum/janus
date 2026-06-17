@@ -4,6 +4,8 @@
 // This library provides a HAL for controlling different types of actuators. It
 // aims to make hardware components easily changeable and tuneable
 
+#pragma once
+
 enum class StatusCode 
 {
   OK = 1,

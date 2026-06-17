@@ -266,6 +266,11 @@ StatusCode Driver<T>::get_status()
   return last_status;
 }
 
+void ESCON50Driver::init()
+{
+  child->init();
+}
+
 void ESCON50Driver::set_speed(double s)
 {
   clear_status();
