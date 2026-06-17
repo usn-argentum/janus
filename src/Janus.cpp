@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "Janus.h"
 
+#pragma once
 //#define DEBUG_PRINTS true
 
 // https://forum.arduino.cc/t/sgn-sign-signum-function-suggestions/602445/2
@@ -10,7 +11,7 @@ template <typename T> int sign(T val) {
 
 namespace Hardware
 {
-
+/*
 void set_pwm_depth(unsigned int d)
 {
   pwm_depth = d;
@@ -21,7 +22,7 @@ void init()
 {
   set_pwm_depth(8);
 }
-
+*/
 inline bool Component::is_armed()
 {
   return armed;
@@ -333,6 +334,40 @@ void ESCON50Driver::set_speed(double s)
   Serial.println(child->get_direction());
   Serial.println((speed >= 0));
 #endif
+  child->update();
+}
+
+double angle_to_steering_value(double deg)
+{
+  return (deg / 180.00) * 255.00;
+}
+
+void ServoDriver::init()
+{
+  clear_status();
+
+  child->init();
+  child->arm();
+}
+
+double get_angle()
+{
+  return angle;
+}
+
+void set_angle(double deg)
+{
+  clear_status();
+
+  if (a < 0 || a > 180)
+  {
+    set_status(StatusCode::DriverInvalidValue);
+    return;
+  }
+
+  angle = deg + trim_angle;
+
+  child->set_period(angle_to_steering_value(angle));
   child->update();
 }
 
