@@ -106,6 +106,19 @@ namespace Hardware
 
       void step(int direction);
   };
+
+  class OpenCRSerialDynamixel : public Component
+  {
+    private:
+      Stream* serial_port;
+
+    public:
+    OpenCRSerialDynamixel(Stream* serial) : Component(), serial_port{ serial } {};
+    void init() override;
+    void update() override;
+
+
+  };
 }
 
 namespace Driver
@@ -166,5 +179,20 @@ namespace Driver
       double get_angle();
       void set_angle(double deg);
   };
+
+  class DynamixelDriver : public Driver<OpenCRSerialDynamixel>
+  {
+    private:
+      double angle = 0.00;
+      double offset_angle = 0.00;
+      double toe_angle = 0.00;
+
+    public:
+      DynamixelDriver(Hardware::OpenCRSerialDynamixel* d) : Driver<OpenCRSerialDynamixel>( d ) {};
+      void init();
+      void update();
+      void get_angle();
+      void set_angle();
+  }
 
 }
