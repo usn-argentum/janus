@@ -11,7 +11,19 @@ template <typename T> int sign(T val) {
 
 namespace Hardware
 {
-  unsigned int pwm_depth = 8;
+
+unsigned int pwm_depth = 8;
+void set_pwm_depth(unsigned int d)
+{
+  pwm_depth = constrain(d, 8, 15);
+  analogWriteResolution(d);
+}
+
+void init()
+{
+  set_pwm_depth(12);
+}
+
 /*
 void set_pwm_depth(unsigned int d)
 {
@@ -168,7 +180,6 @@ void CustomServo::update()
   {
     //analogWrite(pin_pwm, period);
     unsigned int p = map(period, 0, (1<<Hardware::pwm_depth), prd_lower_bound, prd_upper_bound);
-    Serial.print("Servo period: ");Serial.println(p);
     s.writeMicroseconds(p);
   }
   else
@@ -196,15 +207,85 @@ unsigned int CustomServo::get_period()
   return period;
 }
 
-void set_pwm_depth(unsigned int d)
+void OpenCRSerialDynamixel::send_control_packet(control_packet p)
 {
-  pwm_depth = constrain(d, 8, 15);
-  analogWriteResolution(d);
+  uint8_t tx_packet[sizeof(p) + 1];
+  tx_packet[0] = PKT_CONTROL;
+  memcpy(tx_packet + 1, &p, sizeof(p));
+  packet_serial.send(tx_packet, sizeof(p) + 1);
 }
 
-void init()
+void OpenCRSerialDynamixel::send_control_packet(dynamixel_state s_1, dynamixel_state s_2)
 {
-  set_pwm_depth(12);
+  control_packet p;
+  convert_dxl_to_packet(0, s_1, &p);
+  convert_dxl_to_packet(1, s_2, &p);
+  send_control_packet(p);
+}
+
+void OpenCRSerialDynamixel::send_status_packet()
+{
+  uint8_t tx_packet[1];
+  tx_packet[0] = PKT_STATUS;
+  packet_serial.send(tx_packet, sizeof(tx_packet));
+}
+
+void OpenCRSerialDynamixel::send_arm_packet(bool armed)
+{
+  uint8_t tx_packet[2];
+  tx_packet[0] = PKT_ARM;
+  tx_packet[1] = armed;
+  packet_serial.send(tx_packet, sizeof(tx_packet));
+}
+
+void OpenCRSerialDynamixel::convert_dxl_to_packet(int motor_number, dynamixel_state s, control_packet *p)
+{
+  p->goal[motor_number] = (s.radians / M_TWOPI) * 4095.0f;
+  p->velocity[motor_number] = s.velocity / 0.229f;
+  p->acceleration[motor_number] = s.acceleration / 214.577f;
+}
+
+void OpenCRSerialDynamixel::on_packet_received(const uint8_t *buffer, size_t size)
+{
+  status_packet packet;
+  memcpy(&packet, buffer, size);
+}
+
+void OpenCRSerialDynamixel::transmit_motor_state()
+{
+  send_control_packet(motor_1, motor_2);
+}
+
+void OpenCRSerialDynamixel::arm()
+{
+  armed = true;
+  send_arm_packet(true);
+}
+
+void OpenCRSerialDynamixel::disarm()
+{
+  armed = false;
+  send_arm_packet(false);
+}
+
+void OpenCRSerialDynamixel::init()
+{
+  static_cast<HardwareSerial*>(ser_obj)->begin(baudrate);
+  packet_serial.setStream(static_cast<HardwareSerial*>(ser_obj));
+  packet_serial.setPacketHandler(&on_packet_received);
+}
+
+void OpenCRSerialDynamixel::update()
+{
+  unsigned long t = millis();
+  static unsigned long last_status_tick;
+
+  packet_serial.update();
+
+  if (t - last_status_tick >= 100) {
+    last_status_tick = t;
+    send_status_packet();
+  }
 }
 
 /*

@@ -7,6 +7,7 @@
 #pragma once
 
 #include <Servo.h>
+#include <PacketSerial.h>
 
 enum class StatusCode 
 {
@@ -113,17 +114,60 @@ namespace Hardware
       void step(int direction);
   };
 
+  struct dynamixel_state {
+    float radians;
+    float velocity;
+    float acceleration;
+  };
+
   class OpenCRSerialDynamixel : public Component
   {
     private:
-      Stream* serial_port;
+      // Bad to do this in the header, I know.. but I'm kinda stressed, sorry. Adapting from another sketch.
+      //TODO: Clean up, move definitions to .cpp
+      struct control_packet {
+        uint32_t goal[2];
+        uint32_t velocity[2];
+        uint32_t acceleration[2];
+      };
+      control_packet dxl_packet;
+
+      dynamixel_state dxl_state;
+
+      struct status_packet {
+        int32_t current_position[2];
+        int32_t current_velocity[2];
+        int32_t current[2];
+        int32_t input_voltage[2];
+        int32_t temperature[2];
+        int32_t moving[2];
+      };
+
+      enum PacketTypes {
+        PKT_CONTROL = 0xff,
+        PKT_ARM = 0x80,
+        PKT_STATUS = 0x00
+      };
+
+      Stream* ser_obj;
+      unsigned long baudrate;
+      PacketSerial packet_serial;
+      void send_control_packet(control_packet p);
+      void send_control_packet(dynamixel_state s_1, dynamixel_state s_2);
+      void send_status_packet();
+      void send_arm_packet(bool armed);
+      void convert_dxl_to_packet(int motor_number, dynamixel_state s, control_packet* p);
+      static void on_packet_received(const uint8_t* buffer, size_t size);
 
     public:
-    OpenCRSerialDynamixel(Stream* serial) : Component(), serial_port{ serial } {};
-    void init() override;
-    void update() override;
-
-
+      OpenCRSerialDynamixel(Stream* serial, unsigned long baud ) : Component(), ser_obj{ serial }, baudrate{ baud } {};
+      dynamixel_state motor_1;
+      dynamixel_state motor_2;
+      void transmit_motor_state();
+      void init() override;
+      void update() override;
+      void arm();
+      void disarm();
   };
 }
 
