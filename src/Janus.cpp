@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include "Janus.h"
+#include <Servo.h>
 
-//#pragma once
-//#define DEBUG_PRINTS true
+//#define DEBUG_PRINTS
 
 // https://forum.arduino.cc/t/sgn-sign-signum-function-suggestions/602445/2
 template <typename T> int sign(T val) {
@@ -11,6 +11,7 @@ template <typename T> int sign(T val) {
 
 namespace Hardware
 {
+  unsigned int pwm_depth = 8;
 /*
 void set_pwm_depth(unsigned int d)
 {
@@ -85,8 +86,8 @@ void PWMMotor::init()
   pinMode(pin_direction, OUTPUT);
   pinMode(pin_enable, OUTPUT);
 
-  //disarm();
-  arm(); // this is dangerous at best
+  disarm();
+  //arm(); // this is dangerous at best
 }
 
 unsigned int PWMMotor::get_period()
@@ -98,7 +99,7 @@ void PWMMotor::set_period(unsigned int p)
 {
   clear_status();
 
-  if (p < 0 || p >= (1 << 8)) { 
+  if (p < 0 || p >= (1 << Hardware::pwm_depth)) { 
 #ifdef DEBUG_PRINTS
     Serial.println("Invalid motor pwm period");
 #endif 
@@ -142,31 +143,33 @@ void PWMMotor::update()
   if (armed)
   {
     //Serial.println(constrain(period, 25, 230));
-    analogWrite(pin_pwm, constrain(period, Hardware::pwm_depth * 0.1f, Hardware::pwm_depth * 0.9f));
+    analogWrite(pin_pwm, period); // should be constrained here and report error if not in range
     digitalWrite(pin_direction, direction);
     digitalWrite(pin_enable, HIGH);
   }
   else
   {
-    //Serial.println("Disarmed");
     digitalWrite(pin_enable, LOW);
   }
 }
 
-void Servo::init()
+void CustomServo::init()
 {
-  pinMode(pin_pwm, OUTPUT);
+  s.attach(pin_pwm);
 
   disarm();
 }
 
-void Servo::update()
+void CustomServo::update()
 {
   clear_status();
 
   if(armed)
   {
-    analogWrite(pin_pwm, period);
+    //analogWrite(pin_pwm, period);
+    unsigned int p = map(period, 0, (1<<Hardware::pwm_depth), prd_lower_bound, prd_upper_bound);
+    Serial.print("Servo period: ");Serial.println(p);
+    s.writeMicroseconds(p);
   }
   else
   {
@@ -174,11 +177,11 @@ void Servo::update()
   }
 }
 
-void Servo::set_period(unsigned int p)
+void CustomServo::set_period(unsigned int p)
 {
   clear_status();
 
-  if (p < 0 || p >= (1 << 8))
+  if (p < 0 || p >= (1 << Hardware::pwm_depth))
   {
     set_status(StatusCode::HardwareInvalidValue);
     return;
@@ -188,7 +191,7 @@ void Servo::set_period(unsigned int p)
   update();
 }
 
-unsigned int Servo::get_period()
+unsigned int CustomServo::get_period()
 {
   return period;
 }
@@ -325,32 +328,30 @@ void ESCON50Driver::init()
 
 void ESCON50Driver::set_speed(double s)
 {
-  //Serial.print("ESCON set speed: ");
-  //Serial.println(s);
   clear_status();
 
   if (s > 1.0f || s < -1.0f)
   {
-    //Serial.println("Error");
     set_status(StatusCode::DriverInvalidValue);
     return;
   }
 
   speed = s;
 
-  child->set_period(map(abs(speed) * Hardware::pwm_depth, 0, Hardware::pwm_depth, lower_period, upper_period));
+  unsigned int p = map(abs(speed) * (1 << Hardware::pwm_depth), 0, (1 << Hardware::pwm_depth), lower_period, upper_period);
+  child->set_period(p);
   child->set_direction((speed >= 0));
 #ifdef DEBUG_PRINTS
   Serial.print("Motor direction: ");
   Serial.println(child->get_direction());
   Serial.println((speed >= 0));
 #endif
-  child->update();
+  //child->update();
 }
 
 double ServoDriver::angle_to_steering_value(double deg)
 {
-  return (deg / 180.00) * Hardware::pwm_depth;
+  return (deg / 180.00) * ((1 << Hardware::pwm_depth) - 1);
 }
 
 void ServoDriver::init()
@@ -359,6 +360,12 @@ void ServoDriver::init()
 
   child->init();
   child->arm();
+}
+
+void ServoDriver::update()
+{
+  clear_status();
+  child->update();
 }
 
 double ServoDriver::get_angle()

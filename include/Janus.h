@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include <Servo.h>
+
 enum class StatusCode 
 {
   OK = 1,
@@ -22,7 +24,7 @@ enum class StatusCode
 
 namespace Hardware 
 {
-  unsigned int pwm_depth;
+  extern unsigned int pwm_depth;
   void set_pwm_depth(unsigned int d);
   void init();
 
@@ -73,14 +75,18 @@ namespace Hardware
       void set_direction(bool dir);
   };
 
-  class Servo : public Component
+  class CustomServo : public Component
   {
     private:
       size_t pin_pwm;
-      unsigned int period = 0;
+      unsigned int period;
+      unsigned int prd_lower_bound = 620; //µs
+      unsigned int prd_upper_bound = 2420; //µs
+
+      Servo s;
 
     public:
-      Servo(size_t pwm_pin) : Component(), pin_pwm{ pwm_pin } {};
+      CustomServo(size_t pwm_pin) : Component(), pin_pwm{ pwm_pin } {};
       void init() override;
       void update() override;
 
@@ -146,25 +152,18 @@ namespace Driver
   {
     private:
       double speed = 0.00;
-      double lower_pwm_bound = 0.1;
-      unsigned int lower_period = Hardware::pwm_depth * lower_pwm_bound;
-      double upper_pwm_bound = 0.9;
-      unsigned int upper_period = Hardware::pwm_depth * upper_period;
+      unsigned int lower_period;
+      unsigned int upper_period;
 
     public:
-      ESCON50Driver(Hardware::PWMMotor* m) : 
-        Driver<Hardware::PWMMotor>( m ) {
-          lower_pwm_bound = 0.1;
-          lower_period = Hardware::pwm_depth * lower_pwm_bound;
-          upper_pwm_bound = 0.9;
-          upper_period = Hardware::pwm_depth * upper_period;
-        };
+      ESCON50Driver(Hardware::PWMMotor* m, float lower_p = 0.1, float upper_p = 0.9, unsigned int pwm_depth = 8) : 
+        Driver<Hardware::PWMMotor>( m ), lower_period{ (1 << pwm_depth) * lower_p }, upper_period{ (1 << pwm_depth) * upper_p} {}
       void init() override;
       void set_speed(double s);
       void update();
   };
 
-  class ServoDriver : public Driver<Hardware::Servo>
+  class ServoDriver : public Driver<Hardware::CustomServo>
   {
     private:
       double angle = 0.00;
@@ -174,8 +173,9 @@ namespace Driver
       double steering_value_to_angle(double steer);
       
     public:
-      ServoDriver(Hardware::Servo* s) : Driver<Hardware::Servo>( s ) {};
+      ServoDriver(Hardware::CustomServo* s) : Driver<Hardware::CustomServo>( s ) {};
       void init();
+      void update();
       double get_angle();
       void set_angle(double deg);
   };
