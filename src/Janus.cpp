@@ -142,7 +142,7 @@ void PWMMotor::update()
   if (armed)
   {
     //Serial.println(constrain(period, 25, 230));
-    analogWrite(pin_pwm, constrain(period, 25, 230));
+    analogWrite(pin_pwm, constrain(period, Hardware::pwm_depth * 0.1f, Hardware::pwm_depth * 0.9f));
     digitalWrite(pin_direction, direction);
     digitalWrite(pin_enable, HIGH);
   }
@@ -191,6 +191,17 @@ void Servo::set_period(unsigned int p)
 unsigned int Servo::get_period()
 {
   return period;
+}
+
+void set_pwm_depth(unsigned int d)
+{
+  pwm_depth = constrain(d, 8, 15);
+  analogWriteResolution(d);
+}
+
+void init()
+{
+  set_pwm_depth(12);
 }
 
 /*
@@ -327,7 +338,7 @@ void ESCON50Driver::set_speed(double s)
 
   speed = s;
 
-  child->set_period(map(abs(speed) * 255, 0, 255, lower_period, upper_period));
+  child->set_period(map(abs(speed) * Hardware::pwm_depth, 0, Hardware::pwm_depth, lower_period, upper_period));
   child->set_direction((speed >= 0));
 #ifdef DEBUG_PRINTS
   Serial.print("Motor direction: ");
@@ -339,7 +350,7 @@ void ESCON50Driver::set_speed(double s)
 
 double ServoDriver::angle_to_steering_value(double deg)
 {
-  return (deg / 180.00) * 255.00;
+  return (deg / 180.00) * Hardware::pwm_depth;
 }
 
 void ServoDriver::init()

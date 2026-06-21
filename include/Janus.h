@@ -22,9 +22,9 @@ enum class StatusCode
 
 namespace Hardware 
 {
-  /*unsigned int pwm_depth;
+  unsigned int pwm_depth;
   void set_pwm_depth(unsigned int d);
-  void init();*/
+  void init();
 
   class Component
   {
@@ -147,17 +147,17 @@ namespace Driver
     private:
       double speed = 0.00;
       double lower_pwm_bound = 0.1;
-      unsigned int lower_period = 255 * lower_pwm_bound;
+      unsigned int lower_period = Hardware::pwm_depth * lower_pwm_bound;
       double upper_pwm_bound = 0.9;
-      unsigned int upper_period = 255 * upper_period;
+      unsigned int upper_period = Hardware::pwm_depth * upper_period;
 
     public:
       ESCON50Driver(Hardware::PWMMotor* m) : 
         Driver<Hardware::PWMMotor>( m ) {
           lower_pwm_bound = 0.1;
-          lower_period = 255 * lower_pwm_bound;
+          lower_period = Hardware::pwm_depth * lower_pwm_bound;
           upper_pwm_bound = 0.9;
-          upper_period = 255 * upper_period;
+          upper_period = Hardware::pwm_depth * upper_period;
         };
       void init() override;
       void set_speed(double s);
@@ -180,19 +180,18 @@ namespace Driver
       void set_angle(double deg);
   };
 
-  class DynamixelDriver : public Driver<OpenCRSerialDynamixel>
+  class DynamixelDriver : public Driver<Hardware::OpenCRSerialDynamixel>
   {
     private:
       double angle = 0.00;
       double offset_angle = 0.00;
-      double toe_angle = 0.00;
 
     public:
-      DynamixelDriver(Hardware::OpenCRSerialDynamixel* d) : Driver<OpenCRSerialDynamixel>( d ) {};
+      DynamixelDriver(Hardware::OpenCRSerialDynamixel* d) : Driver<Hardware::OpenCRSerialDynamixel>( d ) {};
       void init();
       void update();
       void get_angle();
       void set_angle();
-  }
+  };
 
 }
