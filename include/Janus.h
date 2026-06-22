@@ -6,6 +6,9 @@
 
 #pragma once
 
+#include <Servo.h>
+#include <PacketSerial.h>
+
 enum class StatusCode 
 {
   OK = 1,
@@ -22,9 +25,9 @@ enum class StatusCode
 
 namespace Hardware 
 {
-  /*unsigned int pwm_depth;
+  extern unsigned int pwm_depth;
   void set_pwm_depth(unsigned int d);
-  void init();*/
+  void init();
 
   class Component
   {
@@ -73,14 +76,18 @@ namespace Hardware
       void set_direction(bool dir);
   };
 
-  class Servo : public Component
+  class CustomServo : public Component
   {
     private:
       size_t pin_pwm;
-      unsigned int period = 0;
+      unsigned int period;
+      unsigned int prd_lower_bound = 620; //µs
+      unsigned int prd_upper_bound = 2420; //µs
+
+      Servo s;
 
     public:
-      Servo(size_t pwm_pin) : Component(), pin_pwm{ pwm_pin } {};
+      CustomServo(size_t pwm_pin) : Component(), pin_pwm{ pwm_pin } {};
       void init() override;
       void update() override;
 
@@ -105,6 +112,62 @@ namespace Hardware
       void update() override;
 
       void step(int direction);
+  };
+
+  struct dynamixel_state {
+    float radians;
+    float velocity;
+    float acceleration;
+  };
+
+  class OpenCRSerialDynamixel : public Component
+  {
+    private:
+      // Bad to do this in the header, I know.. but I'm kinda stressed, sorry. Adapting from another sketch.
+      //TODO: Clean up, move definitions to .cpp
+      struct control_packet {
+        uint32_t goal[2];
+        uint32_t velocity[2];
+        uint32_t acceleration[2];
+      };
+      control_packet dxl_packet;
+
+      dynamixel_state dxl_state;
+
+      struct status_packet {
+        int32_t current_position[2];
+        int32_t current_velocity[2];
+        int32_t current[2];
+        int32_t input_voltage[2];
+        int32_t temperature[2];
+        int32_t moving[2];
+      };
+
+      enum PacketTypes {
+        PKT_CONTROL = 0xff,
+        PKT_ARM = 0x80,
+        PKT_STATUS = 0x00
+      };
+
+      Stream* ser_obj;
+      unsigned long baudrate;
+      PacketSerial packet_serial;
+      void send_control_packet(control_packet p);
+      void send_control_packet(dynamixel_state s_1, dynamixel_state s_2);
+      void send_status_packet();
+      void send_arm_packet(bool armed);
+      void convert_dxl_to_packet(int motor_number, dynamixel_state s, control_packet* p);
+      static void on_packet_received(const uint8_t* buffer, size_t size);
+
+    public:
+      OpenCRSerialDynamixel(Stream* serial, unsigned long baud ) : Component(), ser_obj{ serial }, baudrate{ baud } {};
+      dynamixel_state motor_1;
+      dynamixel_state motor_2;
+      void transmit_motor_state();
+      void init() override;
+      void update() override;
+      void arm();
+      void disarm();
   };
 }
 
@@ -133,25 +196,18 @@ namespace Driver
   {
     private:
       double speed = 0.00;
-      double lower_pwm_bound = 0.1;
-      unsigned int lower_period = 255 * lower_pwm_bound;
-      double upper_pwm_bound = 0.9;
-      unsigned int upper_period = 255 * upper_period;
+      unsigned int lower_period;
+      unsigned int upper_period;
 
     public:
-      ESCON50Driver(Hardware::PWMMotor* m) : 
-        Driver<Hardware::PWMMotor>( m ) {
-          lower_pwm_bound = 0.1;
-          lower_period = 255 * lower_pwm_bound;
-          upper_pwm_bound = 0.9;
-          upper_period = 255 * upper_period;
-        };
+      ESCON50Driver(Hardware::PWMMotor* m, float lower_p = 0.1, float upper_p = 0.9, unsigned int pwm_depth = 8) : 
+        Driver<Hardware::PWMMotor>( m ), lower_period{ (1 << pwm_depth) * lower_p }, upper_period{ (1 << pwm_depth) * upper_p} {}
       void init() override;
       void set_speed(double s);
       void update();
   };
 
-  class ServoDriver : public Driver<Hardware::Servo>
+  class ServoDriver : public Driver<Hardware::CustomServo>
   {
     private:
       double angle = 0.00;
@@ -161,10 +217,25 @@ namespace Driver
       double steering_value_to_angle(double steer);
       
     public:
-      ServoDriver(Hardware::Servo* s) : Driver<Hardware::Servo>( s ) {};
+      ServoDriver(Hardware::CustomServo* s) : Driver<Hardware::CustomServo>( s ) {};
       void init();
+      void update();
       double get_angle();
       void set_angle(double deg);
+  };
+
+  class DynamixelDriver : public Driver<Hardware::OpenCRSerialDynamixel>
+  {
+    private:
+      double angle = 0.00;
+      double offset_angle = 0.00;
+
+    public:
+      DynamixelDriver(Hardware::OpenCRSerialDynamixel* d) : Driver<Hardware::OpenCRSerialDynamixel>( d ) {};
+      void init();
+      void update();
+      void get_angle();
+      void set_angle();
   };
 
 }
