@@ -6,236 +6,148 @@
 
 #pragma once
 
+#include <Arduino.h>
 #include <Servo.h>
 #include <PacketSerial.h>
 
-enum class StatusCode 
-{
-  OK = 1,
-  DriverInvalidValue,
-  DriverWarning,
-  DriverError,
-
-  HardwareInvalidValue,
-  HardwareWarning,
-  HardwareError,
-
-  CriticalFailure
-};
-
-namespace Hardware 
-{
-  extern unsigned int pwm_depth;
-  void set_pwm_depth(unsigned int d);
-  void init();
-
-  class Component
-  {
-    protected: // not proud of using protected but bleh
-      StatusCode last_status;
-      bool armed;
-
-      inline void set_status(StatusCode s);
-      inline void clear_status();
-
-    public:
-      virtual void init();
-      virtual void update();
-      
-      inline StatusCode get_status();
-      inline bool was_error();
-      inline bool is_ok();
-
-      void arm();
-      void disarm();
-      inline bool is_armed();
-  };
-
-  class PWMMotor : public Component
-  {
-    private:
-      size_t pin_pwm;
-      size_t pin_direction;
-      size_t pin_enable;
-
-      unsigned int period;
-      bool direction;
-      bool inverted;
- 
-    public:
-      PWMMotor(size_t pwm_pin, size_t dir_pin, size_t en_pin) : Component(), pin_pwm{ pwm_pin }, pin_direction{ dir_pin }, pin_enable { en_pin } {};
-      void init() override;
-      void update() override;
-
-      unsigned int get_period();
-      void set_period(unsigned int p);
-
-      void set_invert(bool inv);
-      
-      bool get_direction();
-      void set_direction(bool dir);
-  };
-
-  class CustomServo : public Component
-  {
-    private:
-      size_t pin_pwm;
-      unsigned int period;
-      unsigned int prd_lower_bound = 620; //µs
-      unsigned int prd_upper_bound = 2420; //µs
-
-      Servo s;
-
-    public:
-      CustomServo(size_t pwm_pin) : Component(), pin_pwm{ pwm_pin } {};
-      void init() override;
-      void update() override;
-
-      void set_period(unsigned int p);
-      unsigned int get_period();
-  };
-
-  class Stepper : public Component
-  {
-    private:
-      size_t pin_a;
-      size_t pin_b;
-      size_t pin_c;
-      size_t pin_d;
-
-      long steps;
-
-    public:
-      Stepper(size_t pa, size_t pb, size_t pc, size_t pd) 
-        : Component(), pin_a{ pa }, pin_b{ pb }, pin_c{ pc }, pin_d{ pd } {};
-      void init() override;
-      void update() override;
-
-      void step(int direction);
-  };
-
-  struct dynamixel_state {
+struct dynamixel_state {
     float radians;
     float velocity;
     float acceleration;
-  };
+};
 
-  class OpenCRSerialDynamixel : public Component
-  {
+class PWMConfig {
     private:
-      // Bad to do this in the header, I know.. but I'm kinda stressed, sorry. Adapting from another sketch.
-      //TODO: Clean up, move definitions to .cpp
-      struct control_packet {
-        uint32_t goal[2];
-        uint32_t velocity[2];
-        uint32_t acceleration[2];
-      };
-      control_packet dxl_packet;
-
-      dynamixel_state dxl_state;
-
-      struct status_packet {
-        int32_t current_position[2];
-        int32_t current_velocity[2];
-        int32_t current[2];
-        int32_t input_voltage[2];
-        int32_t temperature[2];
-        int32_t moving[2];
-      };
-
-      enum PacketTypes {
-        PKT_CONTROL = 0xff,
-        PKT_ARM = 0x80,
-        PKT_STATUS = 0x00
-      };
-
-      Stream* ser_obj;
-      unsigned long baudrate;
-      PacketSerial packet_serial;
-      void send_control_packet(control_packet p);
-      void send_control_packet(dynamixel_state s_1, dynamixel_state s_2);
-      void send_status_packet();
-      void send_arm_packet(bool armed);
-      void convert_dxl_to_packet(int motor_number, dynamixel_state s, control_packet* p);
-      static void on_packet_received(const uint8_t* buffer, size_t size);
+        unsigned int bit_depth = 8;
 
     public:
-      OpenCRSerialDynamixel(Stream* serial, unsigned long baud ) : Component(), ser_obj{ serial }, baudrate{ baud } {};
-      dynamixel_state motor_1;
-      dynamixel_state motor_2;
-      void transmit_motor_state();
-      void init() override;
-      void update() override;
-      void arm();
-      void disarm();
-  };
-}
+        void set_resolution(unsigned int depth);
+        unsigned int get_resolution();
+        unsigned int max_value();
+};
 
-namespace Driver
-{
-  template <typename T>
-  class Driver
-  {
-    protected:
-      StatusCode last_status;
-      bool enable;
-      virtual void set_status(StatusCode s);
-      void clear_status();
-      T* child;
-
-    public:
-      Driver(T* c) : child { c } {};
-      virtual void init();
-      bool was_error();
-      bool is_ok();
-      void set_enable(bool en);
-      StatusCode get_status();
-  };
-
-  class ESCON50Driver: public Driver<Hardware::PWMMotor>
-  {
+class Escon50Config {
     private:
-      double speed = 0.00;
-      unsigned int lower_period;
-      unsigned int upper_period;
-
+        float rpm_ramp_low = 0.0f;
+        float rpm_ramp_high = 600.0f;
+        float pwm_ramp_low = 0.1;
+        float pwm_ramp_high = 0.9;
+    
     public:
-      ESCON50Driver(Hardware::PWMMotor* m, float lower_p = 0.1, float upper_p = 0.9, unsigned int pwm_depth = 8) : 
-        Driver<Hardware::PWMMotor>( m ), lower_period{ (1 << pwm_depth) * lower_p }, upper_period{ (1 << pwm_depth) * upper_p} {}
-      void init() override;
-      void set_speed(double s);
-      void update();
-  };
+        Escon50Config(float low_rpm, float high_rpm, float low_pwm, float high_pwm) :
+            rpm_ramp_low{ low_rpm }, rpm_ramp_high{ high_rpm }, pwm_ramp_low{ low_pwm }, pwm_ramp_high{ high_pwm } {};
+        float rpm_to_dutycycle(float rpm);
+        float max_rpm();
+};
 
-  class ServoDriver : public Driver<Hardware::CustomServo>
-  {
+class VelocityMotor {
+    public:
+        virtual ~VelocityMotor() = default;
+        virtual void init() = 0;
+        virtual void set_rpm(float rpm) = 0;
+        virtual float get_rpm();
+};
+
+class EsconPWMMotor : public VelocityMotor {
     private:
-      double angle = 0.00;
-      double trim_angle = 0.00;
+        unsigned int pin_direction;
+        unsigned int pin_enable;
+        unsigned int pin_pwm;
+        Escon50Config* esc_config;
+        PWMConfig* pwm_config;
+        float target_rpm;
 
-      double angle_to_steering_value(double deg);
-      double steering_value_to_angle(double steer);
-      
     public:
-      ServoDriver(Hardware::CustomServo* s) : Driver<Hardware::CustomServo>( s ) {};
-      void init();
-      void update();
-      double get_angle();
-      void set_angle(double deg);
-  };
+        EsconPWMMotor(unsigned int p_dir, unsigned int p_ena, unsigned int p_pwm, Escon50Config* esc_conf, PWMConfig* pwm_conf) :
+            pin_direction{ p_dir }, pin_enable{ p_ena }, pin_pwm{ p_pwm }, esc_config{ esc_conf }, pwm_config{ pwm_conf } {};
+        
+        void init() override;
+        void set_rpm(float rpm) override;
+        float get_rpm() override;
+        void set_enable(bool enabled);
+};
 
-  class DynamixelDriver : public Driver<Hardware::OpenCRSerialDynamixel>
-  {
+class PositionMotor {
+    public:
+        virtual ~PositionMotor() = default;
+        virtual void init() = 0;
+        virtual void set_position(float radians) = 0;
+        virtual float get_position() = 0;
+};
+
+class ServoMotor : public PositionMotor{
     private:
-      double angle = 0.00;
-      double offset_angle = 0.00;
+        float angle;
+        unsigned int pin_pwm;
+        PWMConfig* pwm_config;
+        Servo s;
 
     public:
-      DynamixelDriver(Hardware::OpenCRSerialDynamixel* d) : Driver<Hardware::OpenCRSerialDynamixel>( d ) {};
-      void init();
-      void update();
-      void get_angle();
-      void set_angle();
-  };
+        ServoMotor(unsigned int p_pwm, PWMConfig* pwm_cfg) : pin_pwm{ p_pwm }, pwm_config{ pwm_cfg } {};
+        void init() override;
+        void set_position(float radians) override;
+        float get_position() override;
+};
 
-}
+class OpenCRDynamixelBridge {
+    private:
+        struct control_packet {
+            uint32_t goal[2];
+            uint32_t velocity[2];
+            uint32_t acceleration[2];
+        };
+
+        struct status_packet {
+            int32_t current_position[2];
+            int32_t current_velocity[2];
+            int32_t current[2];
+            int32_t input_voltage[2];
+            int32_t temperature[2];
+            int32_t moving[2];
+        };
+
+        enum PacketTypes {
+            PKT_CONTROL = 0xff,
+            PKT_ARM = 0x80,
+            PKT_STATUS = 0x00
+        };
+
+        Stream* serial;
+        unsigned long baudrate;
+        PacketSerial packet_serial;
+        control_packet motor_states;
+
+        void send_control_packet(control_packet p);
+        void send_control_packet(dynamixel_state s_1, dynamixel_state s_2);
+        void send_status_packet();
+        void send_arm_packet(bool armed);
+        void convert_dxl_to_packet(int motor_number, dynamixel_state s, control_packet* p);
+        static void on_packet_received(const uint8_t* buffer, size_t size);
+    
+    public:
+        OpenCRDynamixelBridge(Stream* ser, unsigned long baudrate) :
+            serial{ ser }, baudrate{ baudrate } {};
+        void init();
+        void update();
+        void send_arm(bool armed);
+        void send_motors();
+        void id_set_state(unsigned char id, dynamixel_state d);
+};
+
+class OpenCRDynamixelMotor : public PositionMotor {
+    private:
+        unsigned char id;
+        float radians;
+        float velocity;
+        float acceleration;
+        OpenCRDynamixelBridge* bridge;
+    
+    public:
+        OpenCRDynamixelMotor(unsigned char motor_id, float velocity, float acceleration, OpenCRDynamixelBridge* opencr_bridge) :
+            id{ motor_id }, velocity{ velocity }, acceleration{ acceleration }, bridge{ opencr_bridge } {};
+
+        void init() override;
+        void set_position(float rad) override;
+        float get_position() override;
+        void update_bridge();
+};

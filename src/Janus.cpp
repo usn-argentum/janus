@@ -1,518 +1,183 @@
 #include <Arduino.h>
 #include "Janus.h"
-#include <Servo.h>
 
-//#define DEBUG_PRINTS
-
-// https://forum.arduino.cc/t/sgn-sign-signum-function-suggestions/602445/2
-template <typename T> int sign(T val) {
-    return (T(0) < val) - (val < T(0));
+void PWMConfig::set_resolution(unsigned int depth)
+{
+    bit_depth = constrain(static_cast<int>(depth), 8, 15);
+    analogWriteResolution(bit_depth);
 }
 
-namespace Hardware
+unsigned int PWMConfig::get_resolution()
 {
-
-unsigned int pwm_depth = 8;
-void set_pwm_depth(unsigned int d)
-{
-  pwm_depth = constrain(d, 8, 15);
-  analogWriteResolution(d);
+    return bit_depth;
 }
 
-void init()
+unsigned int PWMConfig::max_value()
 {
-  set_pwm_depth(12);
+    return (1 << bit_depth);
 }
 
-/*
-void set_pwm_depth(unsigned int d)
+float Escon50Config::rpm_to_dutycycle(float rpm)
 {
-  pwm_depth = d;
-  analogWriteResolution(d);
+    float rpm_norm = (rpm - rpm_ramp_low) / (rpm_ramp_high - rpm_ramp_low);
+    return pwm_ramp_low + rpm_norm * (pwm_ramp_high - pwm_ramp_low);
 }
 
-void init()
+float Escon50Config::max_rpm()
 {
-  set_pwm_depth(8);
-}
-*/
-inline bool Component::is_armed()
-{
-  return armed;
+    return rpm_ramp_high;
 }
 
-bool Component::was_error()
+void EsconPWMMotor::init()
 {
-  return last_status != StatusCode::OK;
+    pinMode(pin_pwm, OUTPUT);
+    pinMode(pin_enable, OUTPUT);
+    pinMode(pin_direction, OUTPUT);
+
+    //set_enable(false);
 }
 
-bool Component::is_ok()
+void EsconPWMMotor::set_rpm(float rpm)
 {
-  return !was_error();
+    target_rpm = rpm;
+
+    float abs_rpm = fabsf(rpm);
+    unsigned int period = floor(esc_config->rpm_to_dutycycle(abs_rpm) * pwm_config->max_value());
+
+    analogWrite(pin_pwm, period);
+    digitalWrite(pin_direction, rpm < 0);
 }
 
-void Component::set_status(StatusCode s)
+float EsconPWMMotor::get_rpm()
 {
-#ifdef DEBUG_PRINTS
-  Serial.print("Component set status: ");
-  Serial.println(static_cast<int>(s));
-#endif
-
-  last_status = s;
+    return target_rpm;
 }
 
-StatusCode Component::get_status()
+void EsconPWMMotor::set_enable(bool enabled)
 {
-  return last_status;
+    digitalWrite(pin_enable, enabled ? HIGH : LOW);
 }
 
-inline void Component::clear_status()
+void ServoMotor::init()
 {
-  set_status(StatusCode::OK);
+    pinMode(pin_pwm, OUTPUT);
+    s.attach(pin_pwm);
 }
 
-void Component::arm()
+void ServoMotor::set_position(float radians)
 {
-#ifdef DEBUG_PRINTS
-  Serial.println("Component armed");
-#endif
-  armed = true;
-  update();
+    angle = constrain(radians, 0.0f, M_PI); // constrain 0 - 180 degrees
+    float servo_angle = angle * (180.0f / M_PI);
+    s.write(servo_angle);
 }
 
-void Component::disarm()
+float ServoMotor::get_position()
 {
-#ifdef DEBUG_PRINTS
-  Serial.println("Component disarmed");
-#endif
-  armed = false;
-  update();
+    return angle;
 }
 
-void PWMMotor::init()
+void OpenCRDynamixelBridge::send_control_packet(control_packet p)
 {
-#ifdef DEBUG_PRINTS
-  Serial.println("Motor init");
-#endif
-  pinMode(pin_pwm, OUTPUT);
-  pinMode(pin_direction, OUTPUT);
-  pinMode(pin_enable, OUTPUT);
-
-  disarm();
-  //arm(); // this is dangerous at best
+    uint8_t tx_packet[sizeof(p) + 1];
+    tx_packet[0] = PKT_CONTROL;
+    memcpy(tx_packet + 1, &p, sizeof(p));
+    packet_serial.send(tx_packet, sizeof(p) + 1);
 }
 
-unsigned int PWMMotor::get_period()
+void OpenCRDynamixelBridge::send_control_packet(dynamixel_state s_1, dynamixel_state s_2)
 {
-  return period;
+    control_packet p;
+    convert_dxl_to_packet(0, s_1, &p);
+    convert_dxl_to_packet(1, s_2, &p);
+    send_control_packet(p);
 }
 
-void PWMMotor::set_period(unsigned int p)
+void OpenCRDynamixelBridge::send_status_packet()
 {
-  clear_status();
-
-  if (p < 0 || p >= (1 << Hardware::pwm_depth)) { 
-#ifdef DEBUG_PRINTS
-    Serial.println("Invalid motor pwm period");
-#endif 
-    set_status(StatusCode::HardwareInvalidValue);
-    return;
-  }
-
-  period = p;
-  update();
+    uint8_t tx_packet[1];
+    tx_packet[0] = PKT_STATUS;
+    packet_serial.send(tx_packet, sizeof(tx_packet));
 }
 
-void PWMMotor::set_invert(bool inv)
+void OpenCRDynamixelBridge::send_arm_packet(bool armed)
 {
-  inverted = inv;
+    uint8_t tx_packet[2];
+    tx_packet[0] = PKT_ARM;
+    tx_packet[1] = armed;
+    packet_serial.send(tx_packet, sizeof(tx_packet));
 }
 
-bool PWMMotor::get_direction()
+void OpenCRDynamixelBridge::convert_dxl_to_packet(int motor_number, dynamixel_state s, control_packet *p)
 {
-  return direction ^ inverted;
+    p->goal[motor_number] = (s.radians / M_TWOPI) * 4095.0f;
+    p->velocity[motor_number] = s.velocity / 0.229f;
+    p->acceleration[motor_number] = s.acceleration / 214.577f;
 }
 
-void PWMMotor::set_direction(bool dir)
+void OpenCRDynamixelBridge::on_packet_received(const uint8_t *buffer, size_t size)
 {
-#ifdef DEBUG_PRINTS
-  Serial.print("Set motor direction: ");
-  Serial.println(dir);
-#endif
-  clear_status();
-
-  direction = dir ^ inverted;
-  update();
+    status_packet packet;
+    memcpy(&packet, buffer, size);
 }
 
-void PWMMotor::update()
+void OpenCRDynamixelBridge::init()
 {
-  clear_status();
-
-#ifdef DEBUG_PRINTS
-  Serial.print("Motor update: ");
-#endif
-  if (armed)
-  {
-    //Serial.println(constrain(period, 25, 230));
-    analogWrite(pin_pwm, period); // should be constrained here and report error if not in range
-    digitalWrite(pin_direction, direction);
-    digitalWrite(pin_enable, HIGH);
-  }
-  else
-  {
-    digitalWrite(pin_enable, LOW);
-  }
+    static_cast<HardwareSerial*>(serial)->begin(baudrate);
+    packet_serial.setStream(serial);
+    packet_serial.setPacketHandler(on_packet_received);
 }
 
-void CustomServo::init()
+void OpenCRDynamixelBridge::update()
 {
-  s.attach(pin_pwm);
+    unsigned long time = millis();
+    static unsigned long last_status_packet;
+    
+    packet_serial.update();
 
-  disarm();
+    if (time - last_status_packet >= 1000) {
+        last_status_packet = time;
+        send_status_packet();
+    }
 }
 
-void CustomServo::update()
+void OpenCRDynamixelBridge::send_arm(bool armed)
 {
-  clear_status();
-
-  if(armed)
-  {
-    //analogWrite(pin_pwm, period);
-    unsigned int p = map(period, 0, (1<<Hardware::pwm_depth), prd_lower_bound, prd_upper_bound);
-    s.writeMicroseconds(p);
-  }
-  else
-  {
-    //TODO implement
-  }
+    send_arm_packet(armed);
 }
 
-void CustomServo::set_period(unsigned int p)
+void OpenCRDynamixelBridge::send_motors()
 {
-  clear_status();
-
-  if (p < 0 || p >= (1 << Hardware::pwm_depth))
-  {
-    set_status(StatusCode::HardwareInvalidValue);
-    return;
-  }
-
-  period = p;
-  update();
+    send_control_packet(motor_states);
 }
 
-unsigned int CustomServo::get_period()
+void OpenCRDynamixelBridge::id_set_state(unsigned char id, dynamixel_state d)
 {
-  return period;
+    convert_dxl_to_packet(id, d, &motor_states);
 }
 
-void OpenCRSerialDynamixel::send_control_packet(control_packet p)
+void OpenCRDynamixelMotor::init()
 {
-  uint8_t tx_packet[sizeof(p) + 1];
-  tx_packet[0] = PKT_CONTROL;
-  memcpy(tx_packet + 1, &p, sizeof(p));
-  packet_serial.send(tx_packet, sizeof(p) + 1);
 }
 
-void OpenCRSerialDynamixel::send_control_packet(dynamixel_state s_1, dynamixel_state s_2)
+void OpenCRDynamixelMotor::set_position(float rad)
 {
-  control_packet p;
-  convert_dxl_to_packet(0, s_1, &p);
-  convert_dxl_to_packet(1, s_2, &p);
-  send_control_packet(p);
+    radians = rad;
 }
 
-void OpenCRSerialDynamixel::send_status_packet()
+float OpenCRDynamixelMotor::get_position()
 {
-  uint8_t tx_packet[1];
-  tx_packet[0] = PKT_STATUS;
-  packet_serial.send(tx_packet, sizeof(tx_packet));
+    return radians;
 }
 
-void OpenCRSerialDynamixel::send_arm_packet(bool armed)
+void OpenCRDynamixelMotor::update_bridge()
 {
-  uint8_t tx_packet[2];
-  tx_packet[0] = PKT_ARM;
-  tx_packet[1] = armed;
-  packet_serial.send(tx_packet, sizeof(tx_packet));
+    dynamixel_state s;
+    s.radians = radians;
+    s.velocity = velocity;
+    s.acceleration = acceleration;
+    bridge->id_set_state(id, s);
 }
 
-void OpenCRSerialDynamixel::convert_dxl_to_packet(int motor_number, dynamixel_state s, control_packet *p)
-{
-  p->goal[motor_number] = (s.radians / M_TWOPI) * 4095.0f;
-  p->velocity[motor_number] = s.velocity / 0.229f;
-  p->acceleration[motor_number] = s.acceleration / 214.577f;
-}
-
-void OpenCRSerialDynamixel::on_packet_received(const uint8_t *buffer, size_t size)
-{
-  status_packet packet;
-  memcpy(&packet, buffer, size);
-}
-
-void OpenCRSerialDynamixel::transmit_motor_state()
-{
-  send_control_packet(motor_1, motor_2);
-}
-
-void OpenCRSerialDynamixel::arm()
-{
-  armed = true;
-  send_arm_packet(true);
-}
-
-void OpenCRSerialDynamixel::disarm()
-{
-  armed = false;
-  send_arm_packet(false);
-}
-
-void OpenCRSerialDynamixel::init()
-{
-  static_cast<HardwareSerial*>(ser_obj)->begin(baudrate);
-  packet_serial.setStream(static_cast<HardwareSerial*>(ser_obj));
-  packet_serial.setPacketHandler(&on_packet_received);
-}
-
-void OpenCRSerialDynamixel::update()
-{
-  unsigned long t = millis();
-  static unsigned long last_status_tick;
-
-  packet_serial.update();
-
-  if (t - last_status_tick >= 100) {
-    last_status_tick = t;
-    send_status_packet();
-  }
-}
-
-/*
-void Motor::init()
-{
-  pinMode(pin_direction, OUTPUT);
-  pinMode(pin_pwm, OUTPUT);
-  pinMode(pin_enable, OUTPUT);
-
-  digitalWrite(pin_enable, HIGH);
-}
-
-void Motor::set_period(unsigned int s)
-{
-  period = s;
-}
-
-unsigned int Motor::get_period()
-{
-  return period;
-}
-
-void Motor::set_direction(char dir)
-{
-  direction = dir;
-}
-
-char Motor::get_direction()
-{
-  return direction;
-}
-
-void Motor::disable()
-{
-  digitalWrite(pin_enable, LOW);
-}
-
-void Motor::commit()
-{
-  digitalWrite(pin_direction, direction > 0);
-  analogWrite(pin_pwm, period);
-}
-
-void Steering::init()
-{
-  pinMode(pin_pwm, OUTPUT);
-}
-
-void Steering::set_period(unsigned int p)
-{
-  period = p;
-}
-
-unsigned int Steering::get_period()
-{
-  return period;
-}
-
-*/
-} // namespace Hardware
-
-namespace Driver
-{
-
-template <typename T>
-void Driver<T>::set_status(StatusCode s)
-{
-  //Serial.print("Driver set status: ");
-  //Serial.println(static_cast<int>(s));
-  last_status = s;
-}
-
-template <typename T>
-void Driver<T>::clear_status()
-{
-  set_status(StatusCode::OK);
-}
-
-template <typename T>
-void Driver<T>::init()
-{
-#ifdef DEBUG_PRINTS
-  Serial.println("Inited child");
-#endif
-  child->init();
-}
-
-template <typename T>
-void Driver<T>::set_enable(bool en)
-{
-#ifdef DEBUG_PRINTS
-  Serial.print("Driver set enable: ");
-  Serial.println(en);
-#endif
-  clear_status();
-
-  enable = en;
-
-  if (enable)
-  {
-    child->arm();
-  }
-  else
-  {
-    child->disarm();
-  }
-}
-
-template <typename T>
-StatusCode Driver<T>::get_status()
-{
-  return last_status;
-}
-
-void ESCON50Driver::init()
-{
-  //Serial.println("ESCON init");
-  child->init();
-  child->arm();
-}
-
-void ESCON50Driver::set_speed(double s)
-{
-  clear_status();
-
-  if (s > 1.0f || s < -1.0f)
-  {
-    set_status(StatusCode::DriverInvalidValue);
-    return;
-  }
-
-  speed = s;
-
-  unsigned int p = map(abs(speed) * (1 << Hardware::pwm_depth), 0, (1 << Hardware::pwm_depth), lower_period, upper_period);
-  child->set_period(p);
-  child->set_direction((speed >= 0));
-#ifdef DEBUG_PRINTS
-  Serial.print("Motor direction: ");
-  Serial.println(child->get_direction());
-  Serial.println((speed >= 0));
-#endif
-  //child->update();
-}
-
-double ServoDriver::angle_to_steering_value(double deg)
-{
-  return (deg / 180.00) * ((1 << Hardware::pwm_depth) - 1);
-}
-
-void ServoDriver::init()
-{
-  clear_status();
-
-  child->init();
-  child->arm();
-}
-
-void ServoDriver::update()
-{
-  clear_status();
-  child->update();
-}
-
-double ServoDriver::get_angle()
-{
-  return angle;
-}
-
-void ServoDriver::set_angle(double deg)
-{
-  clear_status();
-
-  if (deg < 0 || deg > 180)
-  {
-    set_status(StatusCode::DriverInvalidValue);
-    return;
-  }
-
-  angle = deg + trim_angle;
-
-  child->set_period(angle_to_steering_value(angle));
-  child->update();
-}
-
-/*
-void MotorDriver::init()
-{
-  motor->init();
-}
-
-double MotorDriver::get_speed()
-{
-  return speed;
-}
-
-void MotorDriver::set_speed(double s)
-{
-  if (speed < -1 || speed > 1) { return; }
-  speed = s;
-
-  motor->set_direction(sign(speed));
-  // assumes pwm signaling is "linear"; 0% = 0 speed, 100% = max speed
-  motor->set_period(abs(speed) * 255.0);
-  motor->commit();
-}
-
-void SteeringDriver::init()
-{
-  steering->init();
-}
-
-double SteeringDriver::get_angle()
-{
-  return angle;
-}
-
-void SteeringDriver::set_angle(double a)
-{
-
-}
-*/
-
-} // namespace Driver
-
-// hack to make 'pio run' compile the library for testing
-#ifdef DEBUG_BUILD
+// pio compilation fix dont upload this it wont do anything
 void setup() {}
 void loop() {}
-#endif
-
