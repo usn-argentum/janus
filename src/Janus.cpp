@@ -178,6 +178,8 @@ void OpenCRDynamixelMotor::update_bridge()
     bridge->id_set_state(id, s);
 }
 
-// pio compilation fix dont upload this it wont do anything
-void setup() {}
-void loop() {}
+#ifdef BUILDING_LOCAL_TEST
+    // pio compilation fix dont upload this it wont do anything
+    void setup() {}
+    void loop() {}
+#endif
