@@ -17,6 +17,34 @@ unsigned int PWMConfig::max_value()
     return (1 << bit_depth);
 }
 
+unsigned long TimerConfig::freqency_to_period_us(float freq)
+{
+    return (1 / freq) * 1'000'000;
+}
+
+void TimerConfig::init(float freq, void (*cb)())
+{
+    frequency = freq;
+    interrupt_callback = cb;
+    tmr->begin(interrupt_callback, 1000000); // initially start at 1ms 
+}
+
+void TimerConfig::start()
+{
+    tmr->begin(interrupt_callback, freqency_to_period_us(frequency));
+}
+
+void TimerConfig::stop()
+{
+    tmr->end();
+}
+
+void TimerConfig::set_frequency_hz(float freq)
+{
+    frequency = freq;
+    tmr->update(freqency_to_period_us(frequency));
+}
+
 float Escon50Config::rpm_to_dutycycle(float rpm)
 {
     float rpm_norm = (rpm - rpm_ramp_low) / (rpm_ramp_high - rpm_ramp_low);
@@ -134,7 +162,7 @@ void OpenCRDynamixelBridge::update()
     
     packet_serial.update();
 
-    if (time - last_status_packet >= 1000) {
+    if (time - last_status_packet >= 1'000) {
         last_status_packet = time;
         send_status_packet();
     }
@@ -178,8 +206,37 @@ void OpenCRDynamixelMotor::update_bridge()
     bridge->id_set_state(id, s);
 }
 
+long StepperMotor::angle_to_step(float radians)
+{
+    return radians * steps_per_revolution;
+}
+
+float StepperMotor::step_to_angle(long step)
+{
+    return step / steps_per_revolution;
+}
+
+void StepperMotor::init()
+{
+    pinMode(pin_direction, OUTPUT);
+    pinMode(pin_enable, OUTPUT);
+    pinMode(pin_step, OUTPUT);
+}
+
+void StepperMotor::set_position(float radians)
+{
+    target_angle = radians;
+    target_steps = angle_to_step(target_angle);
+}
+
+float StepperMotor::get_position()
+{
+    return step_to_angle(steps);
+}
+
 #ifdef BUILDING_LOCAL_TEST
     // pio compilation fix dont upload this it wont do anything
     void setup() {}
     void loop() {}
 #endif
+

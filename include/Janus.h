@@ -9,6 +9,7 @@
 #include <Arduino.h>
 #include <Servo.h>
 #include <PacketSerial.h>
+#include <IntervalTimer.h>
 
 struct dynamixel_state {
     float radians;
@@ -24,6 +25,20 @@ class PWMConfig {
         void set_resolution(unsigned int depth);
         unsigned int get_resolution();
         unsigned int max_value();
+};
+
+class TimerConfig {
+    private:
+        IntervalTimer* tmr;
+        float frequency;
+        void (*interrupt_callback)();
+        unsigned long freqency_to_period_us(float freq);
+
+    public:
+        void init(float freq, void (*cb)());    
+        void start();
+        void stop();
+        void set_frequency_hz(float freq);
 };
 
 class Escon50Config {
@@ -84,6 +99,28 @@ class ServoMotor : public PositionMotor{
 
     public:
         ServoMotor(unsigned int p_pwm, PWMConfig* pwm_cfg) : pin_pwm{ p_pwm }, pwm_config{ pwm_cfg } {};
+        void init() override;
+        void set_position(float radians) override;
+        float get_position() override;
+};
+
+class StepperMotor : public PositionMotor {
+    private:
+        unsigned int pin_direction;
+        unsigned int pin_enable;
+        unsigned int pin_step;
+        TimerConfig* tmr_config;
+
+        float target_angle;
+        float steps_per_revolution = 200;
+        long steps;
+        long target_steps;
+
+        long angle_to_step(float radians);
+        float step_to_angle(long step);
+    
+    public:
+        StepperMotor(unsigned int p_dir, unsigned int p_en, unsigned int p_step) : pin_direction{ p_dir }, pin_enable{ p_en }, pin_step{ p_step } {};
         void init() override;
         void set_position(float radians) override;
         float get_position() override;
