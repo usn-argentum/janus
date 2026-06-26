@@ -14,7 +14,7 @@ unsigned int PWMConfig::get_resolution()
 
 unsigned int PWMConfig::max_value()
 {
-    return (1 << bit_depth);
+    return (1 << bit_depth) - 1;
 }
 
 unsigned long TimerConfig::freqency_to_period_us(float freq)
