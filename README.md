@@ -5,13 +5,14 @@ A HAL for quick, easy and safe control of different actuators. (Safety will come
 
 ## Features and documentation
 
-| Actuator                | Status           | Comment                                                          |
-| ----------------------- | ---------------- | ---------------------------------------------------------------- |
-| ESCON 50/8 ESC          | Done             | Works using set_speed with custom rpm and pwm ramp settings      |
-| Microservos             | Done             | Uses the servo library under the hood. Controlled with set_angle |
-| Dynamixel OpenCR brigde | Partial support  | Commands can be sent (set_angle + vel, acc). No telemetry.       |
-| Stepper motors          | Work in progress | Plan: similar interface to servos                                |
-| Gear ratios & scaling   | Incomplete       | Plan: implement more abstract controllers for these purposes     |
+| Actuator                 | Status           | Comment                                                                        |
+| ------------------------ | ---------------- | ------------------------------------------------------------------------------ |
+| ESCON 50/8 ESC           | Done             | Works using set_speed with custom rpm and pwm ramp settings                    |
+| Microservos              | Done             | Uses the servo library under the hood. Controlled with set_angle               |
+| Dynamixel OpenCR brigde  | Partial support  | Commands can be sent (set_angle + vel, acc). No telemetry.                     |
+| Stepper motors           | Work in progress | Plan: similar interface to servos                                              |
+| Gear ratios & scaling    | Incomplete       | Plan: implement more abstract controllers for these purposes                   |
+| PID / control algorithms | Incomplete       | Plan: do research. Maybe separate into it's own library (or use a premade one) |
 
 ## Basic constructs
 ### PWMConfig
@@ -19,8 +20,8 @@ A HAL for quick, easy and safe control of different actuators. (Safety will come
 
 Holds PWM configuration. 
 
-| Function                                   | Description                                                                                     |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Function                                  | Description                                                                                     |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `void set_resolution(unsigned int depth)` | Sets the global PWM resolution. Constrained between 8 - 15 bits.                                |
 | `unsigned int get_resolution()`           | Returns the number of bits the PWM is configured to.                                            |
 | `unsigned int max_value()`                | Returns (1 << bits) - 1. The maximum value that analogWrite can take at the curernt resolution. |
@@ -67,19 +68,13 @@ Base class for motors that are controlled by setting a position. The unit used i
 This is a special class only meant to communicate with the OpenCR to control Dynamixel servos.
 Currently it sits somewhere between an abstract class and a driver / implementation and that's not great.
 
-void init();
-        ;
-        void send_arm(bool armed);
-        ;
-        void id_set_state(unsigned char id, dynamixel_state d);
-
 | Function                                               | Description                                                                                                                                         |
 | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `void init()`                                          | Inits the bridge. Often, specific implementations take pin numbers and other config parameters here.                                                |
 | `void update()`                                        | Updates the underlying serial communication. This needs to be called regularly, but not too often as to overload the bus. ~40Hz usually works well. |
 | `void send_arm(bool armed)`                            | Sends an arm / disarm packet. This takes a long time so don't use it too regularly and only when the servos are not to be moved for a little while. |
 | `void send_motors()`                                   | Sends a motor control packet. It can be called about as often as `update()`                                                                         |
-| void id_set_state(unsigned char id, dynamixel_state d) | Sets the internal state of the dynamixel to be sent on the next call to `send_motors()` |
+| `void id_set_state(unsigned char id, dynamixel_state d)` | Sets the internal state of the dynamixel to be sent on the next call to `send_motors()` |
 
 ### ESCON 50/8
 ...
