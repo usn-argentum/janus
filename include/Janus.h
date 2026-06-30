@@ -7,9 +7,10 @@
 #pragma once
 
 #include <Arduino.h>
-#include <Servo.h>
-#include <PacketSerial.h>
+#include <AccelStepper.h>
 #include <IntervalTimer.h>
+#include <PacketSerial.h>
+#include <Servo.h>
 
 struct dynamixel_state {
     float radians;
@@ -111,19 +112,18 @@ class StepperMotor : public PositionMotor {
         unsigned int pin_step;
         TimerConfig* tmr_config;
 
-        float target_angle;
-        float steps_per_revolution = 200;
-        long steps;
-        long target_steps;
+        AccelStepper stepper;
+        int steps_per_revolution = 3200;
 
         long angle_to_step(float radians);
         float step_to_angle(long step);
     
     public:
-        StepperMotor(unsigned int p_dir, unsigned int p_en, unsigned int p_step) : pin_direction{ p_dir }, pin_enable{ p_en }, pin_step{ p_step } {};
+        StepperMotor(unsigned int p_dir, unsigned int p_en, unsigned int p_step, int per_rev = 3200) : pin_direction{ p_dir }, pin_enable{ p_en }, pin_step{ p_step }, steps_per_revolution{ per_rev } {};
         void init() override;
         void set_position(float radians) override;
         float get_position() override;
+        void update();
 };
 
 class OpenCRDynamixelBridge {

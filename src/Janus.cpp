@@ -221,17 +221,25 @@ void StepperMotor::init()
     pinMode(pin_direction, OUTPUT);
     pinMode(pin_enable, OUTPUT);
     pinMode(pin_step, OUTPUT);
+
+    stepper = AccelStepper(AccelStepper::DRIVER, pin_step, pin_direction);
+    stepper.setEnablePin(pin_enable);
+    stepper.enableOutputs();
 }
 
 void StepperMotor::set_position(float radians)
 {
-    target_angle = radians;
-    target_steps = angle_to_step(target_angle);
+    stepper.moveTo(angle_to_step(radians));
 }
 
 float StepperMotor::get_position()
 {
-    return step_to_angle(steps);
+    return step_to_angle(stepper.currentPosition());
+}
+
+void StepperMotor::update()
+{
+    stepper.run();
 }
 
 #ifdef BUILDING_LOCAL_TEST
