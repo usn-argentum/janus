@@ -67,6 +67,7 @@ void EsconPWMMotor::init()
 
 void EsconPWMMotor::set_rpm(float rpm)
 {
+    if (rpm > 1.0f || rpm < -1.0f) { return; } // don't accept invalid values
     target_rpm = rpm;
 
     float abs_rpm = fabsf(rpm);
