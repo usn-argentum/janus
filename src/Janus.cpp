@@ -67,12 +67,15 @@ void EsconPWMMotor::init()
 
 void EsconPWMMotor::set_rpm(float rpm)
 {
-    if (rpm > 1.0f || rpm < -1.0f) { return; } // don't accept invalid values
+    if (rpm < -1000.0f || rpm > 1000.0f) { return; }  // don't accept invalid values
+
     target_rpm = rpm;
 
     float abs_rpm = fabsf(rpm);
-    unsigned int period = floor(esc_config->rpm_to_dutycycle(abs_rpm) * pwm_config->max_value());
+    float duty_cycle = esc_config->rpm_to_dutycycle(abs_rpm);
+    if (duty_cycle > 0.9f || duty_cycle < 0.1f) { return; } // don't accept invalid values
 
+    unsigned int period = floor(duty_cycle * pwm_config->max_value());
     analogWrite(pin_pwm, constrain(period, pwm_low, pwm_high));
     digitalWrite(pin_direction, rpm < 0);
 }

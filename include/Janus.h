@@ -45,7 +45,7 @@ class TimerConfig {
 class Escon50Config {
     private:
         float rpm_ramp_low = 0.0f;
-        float rpm_ramp_high = 600.0f;
+        float rpm_ramp_high = 500.0f;
         float pwm_ramp_low = 0.1;
         float pwm_ramp_high = 0.9;
     
