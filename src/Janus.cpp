@@ -72,7 +72,7 @@ void EsconPWMMotor::set_rpm(float rpm)
     float abs_rpm = fabsf(rpm);
     unsigned int period = floor(esc_config->rpm_to_dutycycle(abs_rpm) * pwm_config->max_value());
 
-    analogWrite(pin_pwm, period);
+    analogWrite(pin_pwm, constrain(period, pwm_low, pwm_high));
     digitalWrite(pin_direction, rpm < 0);
 }
 
@@ -208,43 +208,81 @@ void OpenCRDynamixelMotor::update_bridge()
 
 long StepperMotor::angle_to_step(float radians)
 {
-    return radians * steps_per_revolution;
+    return (radians / M_TWOPI) * steps_per_revolution;
 }
 
 float StepperMotor::step_to_angle(long step)
 {
-    return step / steps_per_revolution;
+    return (step / steps_per_revolution) * M_TWOPI;
 }
 
 void StepperMotor::init()
 {
+    TS4::begin();
     pinMode(pin_direction, OUTPUT);
     pinMode(pin_enable, OUTPUT);
     pinMode(pin_step, OUTPUT);
 
-    stepper = AccelStepper(AccelStepper::DRIVER, pin_step, pin_direction);
-    stepper.setEnablePin(pin_enable);
-    stepper.enableOutputs();
+    digitalWrite(pin_enable, LOW);
+
+    stepper = new TS4::Stepper(pin_step, pin_direction);
+    stepper->setMaxSpeed(5000.0);
+    stepper->setAcceleration(12000.0);
 }
 
 void StepperMotor::set_position(float radians)
 {
-    stepper.moveTo(angle_to_step(radians));
+    stepper->moveAbsAsync(angle_to_step(radians));
 }
 
 float StepperMotor::get_position()
 {
-    return step_to_angle(stepper.currentPosition());
+    return step_to_angle(stepper->getPosition());
 }
 
-void StepperMotor::update()
+void StepperMotor::home(size_t sw_pin)
 {
-    stepper.run();
+    //stepper->moveRelAsync()
 }
 
 #ifdef BUILDING_LOCAL_TEST
-    // pio compilation fix dont upload this it wont do anything
-    void setup() {}
-    void loop() {}
+
+StepperMotor s1(1, 0, 2, 6400);
+StepperMotor s2(4, 3, 5, 6400);
+StepperMotor s3(7, 6, 8, 6400);
+
+// pio compilation fix dont upload this it wont do anything
+void setup() {
+    pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(10, INPUT_PULLUP);
+
+    delay(500);
+    s1.init();
+    s2.init();
+    s3.init();
+
+    s1.set_position(M_TWOPI);
+    s2.set_position(M_PI);
+    s3.set_position(M_PI_2);
+}
+void loop() {
+    unsigned long time = millis();
+    static unsigned long last_stepper_update;
+    static unsigned long last_led_blink;
+    
+    if (time - last_led_blink >= 500) {
+        last_led_blink = time;
+        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    }
+
+    if (time - last_stepper_update >= 5000) {
+        last_stepper_update = time;
+
+        s1.set_position(((time - 5000) / 5000.0f) * M_PI);
+        s2.set_position(M_PI);
+        s3.set_position(M_PI);
+    }
+}
 #endif
+
 

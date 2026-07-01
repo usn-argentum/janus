@@ -7,10 +7,10 @@
 #pragma once
 
 #include <Arduino.h>
-#include <AccelStepper.h>
 #include <IntervalTimer.h>
 #include <PacketSerial.h>
 #include <Servo.h>
+#include "teensystep4.h"
 
 struct dynamixel_state {
     float radians;
@@ -72,6 +72,8 @@ class EsconPWMMotor : public VelocityMotor {
         Escon50Config* esc_config;
         PWMConfig* pwm_config;
         float target_rpm;
+        unsigned int pwm_low = 102;
+        unsigned int pwm_high = 920;
 
     public:
         EsconPWMMotor(unsigned int p_dir, unsigned int p_ena, unsigned int p_pwm, Escon50Config* esc_conf, PWMConfig* pwm_conf) :
@@ -112,7 +114,7 @@ class StepperMotor : public PositionMotor {
         unsigned int pin_step;
         TimerConfig* tmr_config;
 
-        AccelStepper stepper;
+        TS4::Stepper* stepper;
         int steps_per_revolution = 3200;
 
         long angle_to_step(float radians);
@@ -123,7 +125,7 @@ class StepperMotor : public PositionMotor {
         void init() override;
         void set_position(float radians) override;
         float get_position() override;
-        void update();
+        void home(size_t sw_pin);
 };
 
 class OpenCRDynamixelBridge {
