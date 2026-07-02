@@ -177,6 +177,7 @@ class OpenCRDynamixelMotor : public PositionMotor {
     private:
         unsigned char id;
         float radians;
+        float offset;
         float velocity;
         float acceleration;
         OpenCRDynamixelBridge* bridge;
@@ -188,5 +189,6 @@ class OpenCRDynamixelMotor : public PositionMotor {
         void init() override;
         void set_position(float rad) override;
         float get_position() override;
+        void set_offset(float o);
         void update_bridge();
 };

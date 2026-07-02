@@ -196,6 +196,11 @@ void OpenCRDynamixelMotor::set_position(float rad)
     radians = rad;
 }
 
+void OpenCRDynamixelMotor::set_offset(float o)
+{
+    offset = o;
+}
+
 float OpenCRDynamixelMotor::get_position()
 {
     return radians;
@@ -204,7 +209,7 @@ float OpenCRDynamixelMotor::get_position()
 void OpenCRDynamixelMotor::update_bridge()
 {
     dynamixel_state s;
-    s.radians = radians;
+    s.radians = radians + offset;
     s.velocity = velocity;
     s.acceleration = acceleration;
     bridge->id_set_state(id, s);
