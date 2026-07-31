@@ -375,6 +375,8 @@ void DynamixelManager::init()
     }
 }
 
+StepperManager janus_stepper;
+
 #ifdef BUILDING_LOCAL_TEST
 
 DynamixelServo left(0.0f);
@@ -386,7 +388,6 @@ DynamixelServo claw_dxl(0.0f);
 DynamixelManager claw_manager(&Serial2, 115200);
 DynamixelClaw claw(&claw_manager, &claw_dxl);
 
-StepperManager janus_stepper;
 StepperMotor joint_a(18, 3200 / M_PI, 11, 10, 9);
 
 unsigned long t_start;

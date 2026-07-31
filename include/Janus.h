@@ -296,6 +296,8 @@ class DynamixelManager {
         }
 };
 
+extern StepperManager janus_stepper;
+
 class DynamixelSteering {
     private:
         DynamixelManager* manager;
