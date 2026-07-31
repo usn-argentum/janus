@@ -11,6 +11,11 @@
 #include <PacketSerial.h>
 #include <Servo.h>
 #include "teensystep4.h"
+#include <PID_v2.h>
+
+#ifdef BUILDING_LOCAL_TEST
+    #define N_STEPPERS 1
+#endif
 
 struct dynamixel_state {
     float radians;
@@ -107,7 +112,7 @@ class ServoMotor : public PositionMotor{
         float get_position() override;
 };
 
-class StepperMotor : public PositionMotor {
+/*class StepperMotor : public PositionMotor {
     private:
         unsigned int pin_direction;
         unsigned int pin_enable;
@@ -117,6 +122,17 @@ class StepperMotor : public PositionMotor {
         TS4::Stepper* stepper;
         int steps_per_revolution = 3200;
 
+        double pid_input;
+        double pid_output;
+        double pid_setpoint;
+
+        double Kp = 2;
+        double Ki = 5;
+        double Kd = 1;
+        PID* pid_controller;
+
+        int32_t steps_target;
+
         long angle_to_step(float radians);
         float step_to_angle(long step);
     
@@ -124,8 +140,10 @@ class StepperMotor : public PositionMotor {
         StepperMotor(unsigned int p_dir, unsigned int p_en, unsigned int p_step, int per_rev = 3200) : pin_direction{ p_dir }, pin_enable{ p_en }, pin_step{ p_step }, steps_per_revolution{ per_rev } {};
         void init() override;
         void set_position(float radians) override;
-        float get_position() override;
+        float get_position() override;  
         void home(size_t sw_pin);
+        int32_t update();
+        TS4::Stepper& get_stepper() { return *stepper; }
 };
 
 class OpenCRDynamixelBridge {
@@ -191,4 +209,153 @@ class OpenCRDynamixelMotor : public PositionMotor {
         float get_position() override;
         void set_offset(float o);
         void update_bridge();
+};*/
+
+class StepperMotor : public PositionMotor {
+    private:        
+        volatile int32_t steps = 0;
+        volatile int32_t goal = 1000;
+        volatile uint32_t accumulator = 0;
+        volatile uint32_t acc_goal = 0;
+        float angle_to_steps = 3200 / M_TWOPI;
+        size_t enable_pin;
+        size_t direction_pin;
+        size_t pulse_pin;
+    
+    public:
+        friend void FASTRUN global_stepper_isr();
+        StepperMotor(uint32_t isr_ticks, float angle_to_steps, size_t p_en, size_t p_dir, size_t p_pulse) : acc_goal{ isr_ticks }, angle_to_steps{ angle_to_steps }, enable_pin{ p_en }, direction_pin{ p_dir }, pulse_pin{ p_pulse } {};
+        void init() override;
+        void set_position(float radians) override;
+        float get_position() override;
+        int32_t get_rawsteps();
+        int32_t get_goalsteps();
+};
+
+class StepperManager {
+    private:
+        IntervalTimer stepper_timer;
+
+    public:
+        StepperMotor* motors[N_STEPPERS];
+        void init();
+} janus_stepper;
+
+// From Dynamixel-Bridge
+struct __attribute__((packed)) ClawPacket {
+  uint32_t packet_num;
+  bool armed;
+  float openness; // 0 - 1 -> how open is the claw. TODO: replace with measured distances
+};
+
+struct __attribute__((packed)) SteeringPacket {
+  uint32_t packet_num;
+  bool armed;
+  float left_angle;
+  float right_angle;
+};
+
+class DynamixelServo : public PositionMotor {
+    private:
+        float angle;
+        float offset;
+
+    public:
+        DynamixelServo(float offset) : offset{ offset } {}
+        void init() override {};
+        void set_position(float radians) override {
+            angle = radians;
+        };
+        float get_position() override {
+            return angle;
+        };
+        float* get_position_ptr();
+};
+
+class DynamixelManager {
+    private:
+        Stream* serial;
+        PacketSerial packet_serial;
+        unsigned int baudrate;
+        void (*callback)(const uint8_t*, size_t) = nullptr;
+
+    public:
+        DynamixelManager(Stream* stream, unsigned int baud) : serial{ stream }, baudrate{ baud } {
+            packet_serial.setStream(stream);
+        };
+        void init();
+        void set_callback(void (*cb)(const uint8_t*, size_t)) { callback = cb; }
+        void update() {
+            packet_serial.update();
+        }
+        void send(const uint8_t* buf, size_t size) {
+            packet_serial.send(buf, size);
+        }
+};
+
+class DynamixelSteering {
+    private:
+        DynamixelManager* manager;
+        SteeringPacket state;
+        DynamixelServo* left;
+        DynamixelServo* right;
+        unsigned int tx_period = 20;
+
+        static void packet_callback(const uint8_t*, size_t) {};
+
+    public:
+        DynamixelSteering(DynamixelManager* man, DynamixelServo* left, DynamixelServo* right) : manager{ man }, left{ left }, right{ right } {
+            manager->set_callback(packet_callback);
+        };
+
+        void set_angles(float left_angle, float right_angle) {
+            left->set_position(left_angle);
+            right->set_position(right_angle);
+        }
+
+        void update() {
+            static unsigned long last_tx;
+            manager->update();
+
+            if (millis() - last_tx >= tx_period) {
+                last_tx = millis();
+
+                state.left_angle = left->get_position();
+                state.right_angle = right->get_position();
+                state.packet_num++;
+                manager->send((uint8_t*)&state, sizeof(state));
+            }
+        }
+};
+
+class DynamixelClaw {
+    private:
+        DynamixelManager* manager;
+        ClawPacket state;
+        DynamixelServo* claw;
+        unsigned int tx_period = 20;
+
+        static void packet_callback(const uint8_t*, size_t) {};
+
+    public:
+        DynamixelClaw(DynamixelManager* man, DynamixelServo* claw) : manager{ man }, claw{ claw } {
+            manager->set_callback(packet_callback);
+        };
+
+        void set_angle(float claw_angle) {
+            claw->set_position(claw_angle);
+        }
+
+        void update() {
+            static unsigned long last_tx;
+            manager->update();
+
+            if (millis() - last_tx >= tx_period) {
+                last_tx = millis();
+
+                state.openness = claw->get_position();
+                state.packet_num++;
+                manager->send((uint8_t*)&state, sizeof(state));
+            }
+        }
 };

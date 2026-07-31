@@ -108,7 +108,7 @@ float ServoMotor::get_position()
     return angle;
 }
 
-void OpenCRDynamixelBridge::send_control_packet(control_packet p)
+/*void OpenCRDynamixelBridge::send_control_packet(control_packet p)
 {
     uint8_t tx_packet[sizeof(p) + 1];
     tx_packet[0] = PKT_CONTROL;
@@ -227,20 +227,30 @@ float StepperMotor::step_to_angle(long step)
 
 void StepperMotor::init()
 {
-    TS4::begin();
     pinMode(pin_direction, OUTPUT);
     pinMode(pin_enable, OUTPUT);
     pinMode(pin_step, OUTPUT);
 
     digitalWrite(pin_enable, LOW);
-
+    
     stepper = new TS4::Stepper(pin_step, pin_direction);
-    stepper->setMaxSpeed(5000.0);
-    stepper->setAcceleration(12000.0);
+    stepper->setMaxSpeed(1000.0);
+    stepper->setAcceleration(2000.0);
+
+    pid_controller = new PID(&pid_input, &pid_output, &pid_setpoint, Kp, Ki, Kd, PID::Direct);
+    pid_controller->SetOutputLimits(-3000, 3000);
+    pid_controller->SetMode(PID::Automatic);
+    pid_controller->SetSampleTime(5);
+
+    //int32_t current_position = stepper->getPosition();
+    //stepper->moveAbsAsync(0);
 }
 
 void StepperMotor::set_position(float radians)
 {
+    steps_target = angle_to_step(radians);
+    pid_setpoint = (double)steps_target;
+    //pid_controller->Setpoint(steps_target);
     stepper->moveAbsAsync(angle_to_step(radians));
 }
 
@@ -249,49 +259,151 @@ float StepperMotor::get_position()
     return step_to_angle(stepper->getPosition());
 }
 
+int32_t StepperMotor::update()
+{
+    pid_input = (double)stepper->getPosition();
+    if (pid_controller->Compute()) {
+        int32_t dynamic_target = steps_target + (int32_t)pid_output;
+        stepper->setTargetAbs(dynamic_target);
+        return steps_target + (int32_t)pid_output;
+    }
+    pid_input = (double)stepper->getPosition();
+    pid_controller->Compute();
+    
+    // Return calculated absolute coordinate target
+    return steps_target + (int32_t)pid_output;
+}
+
 void StepperMotor::home(size_t sw_pin)
 {
     //stepper->moveRelAsync()
+}*/
+
+// controls the stepper drivers. called at 200kHz
+void FASTRUN global_stepper_isr() {
+    for (uint32_t i = 0; i < N_STEPPERS; i++) {
+        StepperMotor* s = janus_stepper.motors[i];
+
+        if (s->steps == s->goal) { continue; }
+
+        s->accumulator++;
+        if (s->accumulator >= s->acc_goal) {
+            s->accumulator = 0;
+
+            if (s->steps < s->goal) {
+                digitalWriteFast(s->direction_pin, HIGH);
+                s->steps++;
+            }
+            else {
+                digitalWriteFast(s->direction_pin, LOW);
+                s->steps--;
+            }
+
+            // pulse pin until next interrupt
+            digitalWriteFast(s->pulse_pin, HIGH);
+        }
+        else {
+            digitalWriteFast(s->pulse_pin, LOW);
+        }
+    }
+}
+
+void StepperManager::init()
+{
+    stepper_timer.begin(global_stepper_isr, 5.0);
+}
+
+void StepperMotor::init()
+{
+    pinMode(enable_pin, OUTPUT);
+    pinMode(direction_pin, OUTPUT);
+    pinMode(pulse_pin, OUTPUT); 
+
+    digitalWrite(enable_pin, LOW); // disable at start
+}
+
+void StepperMotor::set_position(float radians)
+{
+    goal = radians * angle_to_steps;
+}
+
+float StepperMotor::get_position()
+{
+    return 0.0f;
+}
+
+int32_t StepperMotor::get_rawsteps()
+{
+    return steps;
+}
+
+int32_t StepperMotor::get_goalsteps()
+{
+    return goal;
+}
+
+float* DynamixelServo::get_position_ptr()
+{
+    return &angle;
+}
+
+void DynamixelManager::init()
+{
+    packet_serial.setStream(serial);
+    if (callback != nullptr) {
+        packet_serial.setPacketHandler(callback);
+    }
 }
 
 #ifdef BUILDING_LOCAL_TEST
 
-StepperMotor s1(1, 0, 2, 6400);
-StepperMotor s2(4, 3, 5, 6400);
-StepperMotor s3(7, 6, 8, 6400);
+DynamixelServo left(0.0f);
+DynamixelServo right(0.0f);
+DynamixelManager steering_manager(&Serial1, 115200);
+DynamixelSteering steering(&steering_manager, &left, &right);
 
-// pio compilation fix dont upload this it wont do anything
+DynamixelServo claw_dxl(0.0f);
+DynamixelManager claw_manager(&Serial2, 115200);
+DynamixelClaw claw(&claw_manager, &claw_dxl);
+
+StepperMotor joint_a(20, 3200 / M_PI, 11, 10, 9);
+
 void setup() {
+    Serial.begin(115200);
+
+    janus_stepper.motors[0] = &joint_a;
+    joint_a.init();
+
+    janus_stepper.init();
+
     pinMode(LED_BUILTIN, OUTPUT);
-    pinMode(10, INPUT_PULLUP);
+    pinMode(8, OUTPUT);
 
-    delay(500);
-    s1.init();
-    s2.init();
-    s3.init();
-
-    s1.set_position(M_TWOPI);
-    s2.set_position(M_PI);
-    s3.set_position(M_PI_2);
+    Serial1.begin(115200);
+    steering.set_angles(0.0f, 0.0f);
+    Serial2.begin(115200);
+    claw.set_angle(0.0f);
 }
+
 void loop() {
-    unsigned long time = millis();
-    static unsigned long last_stepper_update;
-    static unsigned long last_led_blink;
-    
-    if (time - last_led_blink >= 500) {
-        last_led_blink = time;
-        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-    }
+    float p = (millis() % 2000) / 2000.0f;
 
-    if (time - last_stepper_update >= 5000) {
-        last_stepper_update = time;
+    joint_a.set_position(p * 100.0f);
 
-        s1.set_position(((time - 5000) / 5000.0f) * M_PI);
-        s2.set_position(M_PI);
-        s3.set_position(M_PI);
+    steering.set_angles(sin(p * M_TWOPI) * 0.0f, sin(p * M_TWOPI) * 0.0f);
+    steering.update();
+
+    claw.set_angle(sin(p * M_TWOPI * 2) * 0.5f);
+    claw.update();
+    digitalWriteFast(8, !digitalRead(8));
+
+    static unsigned long last_print;
+
+    if (millis() - last_print >= 1000) {
+        last_print = millis();
+        Serial.print(joint_a.get_rawsteps());
+        Serial.print("\t");
+        Serial.println(joint_a.get_goalsteps());
     }
 }
 #endif
-
-
