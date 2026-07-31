@@ -10,8 +10,6 @@
 #include <IntervalTimer.h>
 #include <PacketSerial.h>
 #include <Servo.h>
-#include "teensystep4.h"
-#include <PID_v2.h>
 
 #ifdef BUILDING_LOCAL_TEST
     #define N_STEPPERS 1
@@ -211,10 +209,24 @@ class OpenCRDynamixelMotor : public PositionMotor {
         void update_bridge();
 };*/
 
+class StepperMotor;
+
+class StepperManager {
+    private:
+        IntervalTimer stepper_timer;
+
+    public:
+        StepperMotor* motors[N_STEPPERS];
+        void init();
+        void homing_sequence(StepperMotor& motor, size_t signal_pin, int tickspeed, float end_angle);
+} janus_stepper;
+
+
 class StepperMotor : public PositionMotor {
     private:        
         volatile int32_t steps = 0;
-        volatile int32_t goal = 1000;
+        volatile int32_t offset = 0;
+        volatile int32_t goal = 0;
         volatile uint32_t accumulator = 0;
         volatile uint32_t acc_goal = 0;
         float angle_to_steps = 3200 / M_TWOPI;
@@ -224,6 +236,7 @@ class StepperMotor : public PositionMotor {
     
     public:
         friend void FASTRUN global_stepper_isr();
+        friend void StepperManager::homing_sequence(StepperMotor& motor, size_t signal_pin, int tickspeed, float end_angle);
         StepperMotor(uint32_t isr_ticks, float angle_to_steps, size_t p_en, size_t p_dir, size_t p_pulse) : acc_goal{ isr_ticks }, angle_to_steps{ angle_to_steps }, enable_pin{ p_en }, direction_pin{ p_dir }, pulse_pin{ p_pulse } {};
         void init() override;
         void set_position(float radians) override;
@@ -231,15 +244,6 @@ class StepperMotor : public PositionMotor {
         int32_t get_rawsteps();
         int32_t get_goalsteps();
 };
-
-class StepperManager {
-    private:
-        IntervalTimer stepper_timer;
-
-    public:
-        StepperMotor* motors[N_STEPPERS];
-        void init();
-} janus_stepper;
 
 // From Dynamixel-Bridge
 struct __attribute__((packed)) ClawPacket {

@@ -284,13 +284,13 @@ void FASTRUN global_stepper_isr() {
     for (uint32_t i = 0; i < N_STEPPERS; i++) {
         StepperMotor* s = janus_stepper.motors[i];
 
-        if (s->steps == s->goal) { continue; }
+        if ((s->steps + s->offset *0) == s->goal) { continue; }
 
         s->accumulator++;
         if (s->accumulator >= s->acc_goal) {
             s->accumulator = 0;
 
-            if (s->steps < s->goal) {
+            if ((s->steps + s->offset*0) < s->goal) {
                 digitalWriteFast(s->direction_pin, HIGH);
                 s->steps++;
             }
@@ -313,6 +313,26 @@ void StepperManager::init()
     stepper_timer.begin(global_stepper_isr, 5.0);
 }
 
+void StepperManager::homing_sequence(StepperMotor& motor, size_t signal_pin, int tickspeed, float home_angle)
+{
+    uint32_t previous_acc_goal = motor.acc_goal;
+
+    motor.steps = 0;
+    motor.acc_goal = abs(tickspeed);
+
+    motor.goal = (tickspeed > 0) ? INT32_MAX : INT32_MIN;
+    while(!digitalRead(signal_pin)) {}
+
+    motor.goal = (tickspeed > 0) ? INT32_MIN : INT32_MAX;
+    motor.acc_goal = abs(tickspeed) * 4;
+    while(digitalRead(signal_pin)) {}
+
+    motor.offset = -motor.steps + home_angle * motor.angle_to_steps;
+    motor.steps = home_angle * motor.angle_to_steps;
+    motor.goal = motor.steps;
+    motor.acc_goal = previous_acc_goal;
+}
+
 void StepperMotor::init()
 {
     pinMode(enable_pin, OUTPUT);
@@ -324,7 +344,7 @@ void StepperMotor::init()
 
 void StepperMotor::set_position(float radians)
 {
-    goal = radians * angle_to_steps;
+    goal = radians * angle_to_steps + offset;
 }
 
 float StepperMotor::get_position()
@@ -366,8 +386,9 @@ DynamixelServo claw_dxl(0.0f);
 DynamixelManager claw_manager(&Serial2, 115200);
 DynamixelClaw claw(&claw_manager, &claw_dxl);
 
-StepperMotor joint_a(20, 3200 / M_PI, 11, 10, 9);
+StepperMotor joint_a(18, 3200 / M_PI, 11, 10, 9);
 
+unsigned long t_start;
 void setup() {
     Serial.begin(115200);
 
@@ -383,24 +404,26 @@ void setup() {
     steering.set_angles(0.0f, 0.0f);
     Serial2.begin(115200);
     claw.set_angle(0.0f);
+
+    pinMode(32, INPUT_PULLDOWN);
+    janus_stepper.homing_sequence(joint_a, 32, -200, 1.0f);
+    t_start = millis();
 }
 
 void loop() {
-    float p = (millis() % 2000) / 2000.0f;
+    float p = ((millis() - t_start) % 10000) / 10000.0f;
 
-    joint_a.set_position(p * 100.0f);
-
+    joint_a.set_position(sin(p * M_TWOPI) * M_TWOPI);
+    
     steering.set_angles(sin(p * M_TWOPI) * 0.0f, sin(p * M_TWOPI) * 0.0f);
     steering.update();
 
     claw.set_angle(sin(p * M_TWOPI * 2) * 0.5f);
     claw.update();
-    digitalWriteFast(8, !digitalRead(8));
 
     static unsigned long last_print;
-
-    if (millis() - last_print >= 1000) {
-        last_print = millis();
+    if ((millis() - t_start) - last_print >= 1000) {
+        last_print = millis() - t_start;
         Serial.print(joint_a.get_rawsteps());
         Serial.print("\t");
         Serial.println(joint_a.get_goalsteps());
