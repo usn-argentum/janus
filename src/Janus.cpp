@@ -333,6 +333,13 @@ void StepperManager::homing_sequence(StepperMotor& motor, size_t signal_pin, int
     motor.acc_goal = previous_acc_goal;
 }
 
+void StepperManager::set_arm_all(bool arm)
+{
+    for (int i = 0; i < N_STEPPERS; i++) {
+        motors[i]->set_arm(arm);
+    }
+}
+
 void StepperMotor::init()
 {
     pinMode(enable_pin, OUTPUT);
@@ -360,6 +367,11 @@ int32_t StepperMotor::get_rawsteps()
 int32_t StepperMotor::get_goalsteps()
 {
     return goal;
+}
+
+void StepperMotor::set_arm(bool arm)
+{
+    digitalWrite(enable_pin, !arm);
 }
 
 float* DynamixelServo::get_position_ptr()

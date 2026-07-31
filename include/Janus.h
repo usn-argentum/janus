@@ -219,7 +219,10 @@ class StepperManager {
         StepperMotor* motors[N_STEPPERS];
         void init();
         void homing_sequence(StepperMotor& motor, size_t signal_pin, int tickspeed, float end_angle);
+        void set_arm_all(bool arm);
 };
+
+extern StepperManager janus_stepper;
 
 class StepperMotor : public PositionMotor {
     private:        
@@ -242,6 +245,7 @@ class StepperMotor : public PositionMotor {
         float get_position() override;
         int32_t get_rawsteps();
         int32_t get_goalsteps();
+        void set_arm(bool arm);
 };
 
 // From Dynamixel-Bridge
@@ -295,8 +299,6 @@ class DynamixelManager {
             packet_serial.send(buf, size);
         }
 };
-
-extern StepperManager janus_stepper;
 
 class DynamixelSteering {
     private:
