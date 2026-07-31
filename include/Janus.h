@@ -219,8 +219,7 @@ class StepperManager {
         StepperMotor* motors[N_STEPPERS];
         void init();
         void homing_sequence(StepperMotor& motor, size_t signal_pin, int tickspeed, float end_angle);
-} janus_stepper;
-
+};
 
 class StepperMotor : public PositionMotor {
     private:        
