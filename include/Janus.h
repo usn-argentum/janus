@@ -218,7 +218,7 @@ class StepperManager {
     public:
         StepperMotor* motors[N_STEPPERS];
         void init();
-        void homing_sequence(StepperMotor& motor, size_t signal_pin, int tickspeed, float end_angle);
+        void homing_sequence(StepperMotor& motor, size_t signal_pin, int tickspeed, float end_angle, bool pin_goal = true);
         void set_arm_all(bool arm);
 };
 
@@ -238,7 +238,7 @@ class StepperMotor : public PositionMotor {
     
     public:
         friend void FASTRUN global_stepper_isr();
-        friend void StepperManager::homing_sequence(StepperMotor& motor, size_t signal_pin, int tickspeed, float end_angle);
+        friend void StepperManager::homing_sequence(StepperMotor& motor, size_t signal_pin, int tickspeed, float end_angle, bool pin_goal = true);
         StepperMotor(uint32_t isr_ticks, float angle_to_steps, size_t p_en, size_t p_dir, size_t p_pulse) : acc_goal{ isr_ticks }, angle_to_steps{ angle_to_steps }, enable_pin{ p_en }, direction_pin{ p_dir }, pulse_pin{ p_pulse } {};
         void init() override;
         void set_position(float radians) override;

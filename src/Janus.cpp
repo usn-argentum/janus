@@ -313,7 +313,7 @@ void StepperManager::init()
     stepper_timer.begin(global_stepper_isr, 5.0);
 }
 
-void StepperManager::homing_sequence(StepperMotor& motor, size_t signal_pin, int tickspeed, float home_angle)
+void StepperManager::homing_sequence(StepperMotor& motor, size_t signal_pin, int tickspeed, float home_angle, bool pin_goal = true)
 {
     uint32_t previous_acc_goal = motor.acc_goal;
 
@@ -321,11 +321,11 @@ void StepperManager::homing_sequence(StepperMotor& motor, size_t signal_pin, int
     motor.acc_goal = abs(tickspeed);
 
     motor.goal = (tickspeed > 0) ? INT32_MAX : INT32_MIN;
-    while(!digitalRead(signal_pin)) {}
+    while(!(digitalRead(signal_pin) == pin_goal)) {}
 
     motor.goal = (tickspeed > 0) ? INT32_MIN : INT32_MAX;
     motor.acc_goal = abs(tickspeed) * 4;
-    while(digitalRead(signal_pin)) {}
+    while(digitalRead(signal_pin)==pin_goal) {}
 
     motor.offset = -motor.steps + home_angle * motor.angle_to_steps;
     motor.steps = home_angle * motor.angle_to_steps;
